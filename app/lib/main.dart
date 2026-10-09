@@ -2212,7 +2212,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               _guidePick(
                 title: 'Worker + 服务器',
-                body: '网页先到 Worker，再从 VPS 出去。橙云回源不稳时用这套。会占用 Worker 免费额度。',
+                body: '网页先到 Worker，再从 VPS 出去。橙云回源不稳时用这套。会占用 Worker 请求额度。',
                 via: 'landing',
                 udp: true,
                 action: '去搭建',
@@ -2282,7 +2282,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _guideNote('登录 VPS 失败：本机能连上 22，用户是 root，密码正确。'),
         _guideNote('橙云节点检查失败：安全组没放行 443，或 443 已被别的程序占用。SSL 保持 Full，不要改成 Full (strict)。'),
         _guideNote('有些网站进不去：没有服务器时，到「本机」打开「打开打不开的网站」，然后把浏览器关掉再开。有服务器也可以换成带服务器的两套。'),
-        _guideNote('Worker 突然连不上：免费额度大约每天 10 万次请求。到「本机」跑一次诊断能看到今天用量。'),
+        _guideNote('Worker 突然连不上：大约每天 10 万次请求。到「本机」跑一次诊断能看到今天用量。'),
         _guideNote('重连时浏览器会先直连，恢复后代理自动挂回。多条节点时会自动换一条能用的。'),
       ],
     );

@@ -125,7 +125,7 @@ class WorkerUsage {
   factory WorkerUsage.fromRequests(int requests) {
     if (requests >= workerDailyLimit) {
       return WorkerUsage(
-        line: 'Worker 用量 $requests，已到免费上限 $workerDailyLimit',
+        line: 'Worker 用量 $requests，已到每日上限 $workerDailyLimit',
         homeLine: '今日额度已用完，网页可能打不开',
         requests: requests,
         blocked: true,
