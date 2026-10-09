@@ -1,97 +1,36 @@
-# RSQ
+# 跳跳猴
 
-自己的 Cloudflare Worker 当 TCP 出口，电脑和手机在本机开 SOCKS5 / HTTP 代理。Windows、Android、macOS 用同一个 Flutter 界面。
+一只会跳的猴子。点一下就接入，网页、视频和游戏走加密通道，流量落在 Cloudflare 上，用的是它的免费额度。
 
-这不是一张虚拟网卡。Worker 不能收发原始 IP 包，也没有入站 UDP。能走的是 TCP：浏览器 HTTPS、SSH、一般的 TCP 程序。SOCKS 的 UDP 会直接拒绝。
+![跳跳猴首页](docs/home.png)
 
-## 协议
+Windows 安装包：<https://github.com/tiaotiaohou559/tiaotiaohou/releases/download/windows/tiaotiaohou-Setup.exe>
 
-RSQ/1 按 Cloudflare 能终止的流量改过。不在 Worker 里拆多路复用帧，否则免费档 10 毫秒 CPU 会很快被吃完。
+## 加密协议
 
-一条本地 TCP 对应一条到 Worker 的请求：
+外面这一层是 Cloudflare 已经在用的加密，不是自己另造一套密码。
 
-```http
-POST /rsq/v1/tcp HTTP/3
-authorization: Bearer <令牌>
-x-rsq-host: example.com
-x-rsq-port: 443
-x-rsq-v: 1
+- **HTTP/3**：默认走这条。它跑在 QUIC 上，加密是 TLS 1.3，端口是 UDP 443。握手短，丢包时也不用整段重来。
+- **HTTP/2**：UDP 被挡住，或者这条路变慢时自动换上。加密仍是 TLS，Worker 看到的还是同一个请求。
+- **HTTP/1**：前两条都不通时的保底。
 
-<上传的原始 TCP 字节>
-```
+一条本地连接对应一条加密请求。网站内容在通道里原样通过，客户端不拆开重打包。令牌只用来确认这是你的节点。
 
-响应体是目标服务器返回的原始 TCP 字节。Worker 用官方的 `connect()` 拨出去，请求体和套接字对拷，中间不再解析。
+网页优先留在 HTTP/3。看视频、拉流时如果 HTTP/2 更稳，会单独改走那条，不用你手动切。
 
-客户端优先走 HTTP/3（UDP 443）。这条路已经对 `cloudflare.com` 做过握手。UDP 被挡住时自动改走 HTTP/2，Worker 看到的仍是同一个请求。
+## 免费额度
 
-## 部署 Worker
+节点挂在 Cloudflare Worker 上，走的是免费档，不用按流量买出口。
 
-```powershell
-cd worker
-npm install
-npx wrangler secret put RSQ_TOKEN
-npx wrangler deploy
-```
+免费档大约每天 10 万次请求。每开一条新的 TCP 连接算 1 次，转发本身不占那点 CPU。首页能看到今天用了多少。内网、本机和 25 端口不会放行。
 
-令牌用一长串随机字符。本地调试把同一行写进 `worker/.dev.vars`，文件名见 `.dev.vars.example`。不要把令牌提交进仓库。
+## 用起来会碰到的功能
 
-节点地址是 `https://rsq.lumono.site`。不要用 `workers.dev`，那个域名在国内访问不了。
-
-免费档大约每天 10 万次请求，每次新的 TCP 连接算 1 次。CPU 时间几乎都花在拨号和收尾，转发本身交给运行时。内网地址、本机地址和 25 端口会拒绝。
-
-## 编译客户端
-
-三个平台都要先编 Rust 核心。
-
-Windows：
-
-```powershell
-.\tool\build-windows.ps1
-```
-
-开发时也可以：
-
-```powershell
-cd core
-cargo build --release
-cd ..\app
-flutter run -d windows
-```
-
-程序会向上查找 `core\target\release\rsq_core.dll`。
-
-Android 需要 NDK 和 `cargo-ndk`：
-
-```powershell
-.\tool\build-android.ps1
-```
-
-macOS：
-
-```sh
-sh tool/build-macos.sh
-```
-
-Xcode 工程会把 `librsq_core.dylib` 拷进 App。沙箱已经打开出站和本机监听。
-
-## 使用
-
-1. 右上角设置里填一次 Worker 地址和令牌，保存。也可以写进 `app/lib/builtin_node.dart` 再编译。
-2. 回到主界面，点中间的连接按钮。不用登录。
-3. Windows 和 macOS 默认会顺便打开系统代理。浏览器走 `127.0.0.1:8080`，SOCKS 程序走 `127.0.0.1:1080`。
-
-Windows 可以勾选「连接后设置系统代理」。本机地址不会进代理，避免把自己绕进去。代理只监听 `127.0.0.1`。
-
-Android 连接后会挂一个前台通知，避免系统把进程杀掉。系统不会自动把全部 App 导进代理；Firefox 这类能填 SOCKS 的应用，填 `127.0.0.1:1080`。
-
-## 检查
-
-```powershell
-cd core
-cargo test
-cargo test cloudflare_accepts -- --ignored --nocapture
-cd ..\worker
-node --experimental-strip-types test/guard.test.ts
-cd ..\app
-flutter test
-```
+- **优选 IP**：同一个 Cloudflare 节点可以钉一条更快的地址。晚上这条路堵了，换一个再连。
+- **国内直连**：百度、国内网站不绕出去。
+- **游戏 UDP**：有落地服务器时，游戏的 UDP 直接送到那边，不跟网页抢同一条路。
+- **测速**：连上之后可以看延迟、下载和上传。
+- **断了先拦住**：节点掉线时先停住，不把流量漏回真实网络。
+- **分享**：把节点分给别人时可以设过期时间和次数。
+- **中英文**：右上角切换。
+- **本机代理**：只听 `127.0.0.1`。浏览器走 `8080`，需要 SOCKS 的程序走 `1080`。
