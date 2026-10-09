@@ -1,0 +1,18 @@
+[Unit]
+Description=跳跳猴落地
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/tiaotiaohou/landing.py
+Restart=always
+RestartSec=2
+Environment=TTM_PORT=8443
+Environment=TTM_TLS_PORT=8444
+Environment=TTM_TOKEN_FILE=/etc/tiaotiaohou/token
+Environment=TTM_CERT_FILE=/etc/tiaotiaohou/cert.pem
+Environment=TTM_KEY_FILE=/etc/tiaotiaohou/key.pem
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

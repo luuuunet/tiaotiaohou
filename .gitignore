@@ -1,0 +1,12 @@
+core/target/
+worker/node_modules/
+worker/dist/
+worker/.wrangler/
+worker/.dev.vars
+app/.dart_tool/
+app/build/
+dist/
+*.dll
+*.so
+*.dylib
+*.exe

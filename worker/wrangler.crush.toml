@@ -1,0 +1,9 @@
+name = "crush-vpn"
+main = "src/index.ts"
+compatibility_date = "2026-09-28"
+workers_dev = false
+account_id = "7f795232352119f59469c2be8b308bc5"
+
+[vars]
+LANDING_HOST = "66.94.122.53"
+LANDING_PORT = "8443"

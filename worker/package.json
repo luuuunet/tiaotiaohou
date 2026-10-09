@@ -1,0 +1,15 @@
+{
+  "name": "rsq-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "wrangler deploy --dry-run --outdir dist",
+    "test": "node --experimental-strip-types test/guard.test.ts"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250927.0",
+    "wrangler": "^4.40.0"
+  }
+}

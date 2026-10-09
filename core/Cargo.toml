@@ -1,0 +1,43 @@
+[package]
+name = "rsq_core"
+version = "1.0.0"
+edition = "2021"
+description = "RSQ/1 client core: HTTP/3 to Cloudflare Workers, local SOCKS5 and HTTP proxies"
+license = "MIT"
+
+[lib]
+name = "rsq_core"
+crate-type = ["cdylib", "rlib"]
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.test]
+debug = "line-tables-only"
+
+[dependencies]
+anyhow = "1"
+bytes = "1"
+h2 = "0.4"
+h3 = "0.0.8"
+h3-quinn = "0.0.10"
+http = "1"
+quinn = { version = "0.11", default-features = false, features = ["rustls-ring", "runtime-tokio"] }
+rcgen = { version = "0.13", features = ["pem", "x509-parser"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+socket2 = "0.6"
+tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
+futures-util = "0.3"
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+tokio-tungstenite = { version = "0.26", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
+url = "2"
+webpki-roots = "0.26"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security_Cryptography",
+    "Win32_System_Registry",
+] }
