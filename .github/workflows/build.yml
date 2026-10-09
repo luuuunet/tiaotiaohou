@@ -56,6 +56,7 @@ jobs:
           ) | Where-Object { Test-Path $_ } | Select-Object -First 1
           if (-not $iscc) { throw "找不到 ISCC.exe" }
           & $iscc tool\crush-vpn.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path dist\跳跳猴-Setup.exe)) { throw "没有生成安装包" }
           Get-Item dist\跳跳猴-Setup.exe | Select-Object FullName, Length
       - uses: actions/upload-artifact@v4
