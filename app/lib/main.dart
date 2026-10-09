@@ -72,6 +72,7 @@ class _HomePageState extends State<HomePage> {
   var _cfBestColo = '';
   var _cfBestHost = '';
   var _cfBestAt = 0;
+  var _cfPicking = false;
   var _fetchEnabled = false;
   var _exitVia = 'landing';
   var _vpsIp = '';
@@ -957,7 +958,7 @@ class _HomePageState extends State<HomePage> {
             Text('${tx('游戏用', 'Games')} 127.0.0.1:$_socks', style: const TextStyle(color: kMute, fontSize: 15, height: 1.4)),
           const Spacer(),
           TicketShell(
-            height: 228,
+            height: 272,
             onTap: _toggle,
             stub: GoldStub(
               kicker: _running ? 'ON' : 'OFF',
@@ -1016,26 +1017,11 @@ class _HomePageState extends State<HomePage> {
                     Text(action, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800, height: 1, color: kInk)),
                   ],
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    const AppIcon('globe.svg', size: 16),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        host.isEmpty
-                            ? tx('先去「节点」加一条', 'Add a node first')
-                            : (connecting
-                                ? '${tx('正在接入', 'Joining')} $host'
-                                : (_cfBestOn && _cfBestIp.isNotEmpty && usesCloudflarePath(_exitVia, host)
-                                    ? '$host · ${tx('优选', 'Best')} $_cfBestIp${_cfBestMs > 0 ? ' ${_cfBestMs}ms' : ''}'
-                                    : host)),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: kMute, height: 1.2, fontSize: 16, fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () {},
+                  behavior: HitTestBehavior.opaque,
+                  child: _bestIpRow(host, connecting),
                 ),
               ],
             ),
@@ -1052,6 +1038,112 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
+  }
+
+  Widget _bestIpRow(String host, bool connecting) {
+    final cloud = usesCloudflarePath(_exitVia, host);
+    final label = host.isEmpty
+        ? tx('先去「节点」加一条', 'Add a node first')
+        : (connecting
+            ? '${tx('正在接入', 'Joining')} $host'
+            : (_cfBestOn && _cfBestIp.isNotEmpty && cloud
+                ? '$host · ${tx('优选', 'Best')} $_cfBestIp${_cfBestMs > 0 ? ' ${_cfBestMs}ms' : ''}'
+                : host));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const AppIcon('globe.svg', size: 16),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                _cfPicking ? tx('正在换优选地址', 'Switching address') : label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: kMute, height: 1.2, fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+        if (cloud) ...[
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const AppIcon('cloud.svg', size: 16),
+              const SizedBox(width: 6),
+              Text(tx('优选 IP', 'Best IP'), style: const TextStyle(color: kInk, fontWeight: FontWeight.w800, fontSize: 14)),
+              const SizedBox(width: 4),
+              Transform.scale(
+                scale: 0.82,
+                child: Switch(
+                  value: _cfBestOn,
+                  onChanged: _cfPicking || connecting ? null : (value) => unawaited(_setHomeBestIp(value)),
+                ),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: (!_cfBestOn || _cfPicking || connecting) ? null : () => unawaited(_switchHomeBestIp()),
+                child: Text(_cfPicking ? tx('扫描中', 'Scanning') : tx('换一个', 'Another')),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _setHomeBestIp(bool value) async {
+    setState(() => _cfBestOn = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('cf_best_on', value);
+    if (value && _cfBestIp.isEmpty) {
+      await _switchHomeBestIp(skipCurrent: false);
+      return;
+    }
+    if (_running) await _reapplyRuntime();
+  }
+
+  Future<void> _switchHomeBestIp({bool skipCurrent = true}) async {
+    final host = Uri.tryParse(_endpoint)?.host ?? '';
+    if (!usesCloudflarePath(_exitVia, host)) {
+      _show(tx('当前出口不用优选 IP', 'This exit does not use a Cloudflare address'));
+      return;
+    }
+    setState(() {
+      _cfPicking = true;
+      _cfBestOn = true;
+    });
+    try {
+      final pick = await pickCloudflareIp(
+        host: host,
+        token: _token,
+        skip: skipCurrent && _cfBestIp.isNotEmpty ? {_cfBestIp} : const {},
+      );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('cf_best_on', true);
+      await prefs.setString('cf_best_ip', pick.ip);
+      await prefs.setInt('cf_best_ms', pick.ms);
+      await prefs.setString('cf_best_colo', pick.colo);
+      await prefs.setString('cf_best_host', host);
+      await prefs.setInt('cf_best_at', DateTime.now().millisecondsSinceEpoch);
+      if (!mounted) return;
+      setState(() {
+        _cfBestIp = pick.ip;
+        _cfBestMs = pick.ms;
+        _cfBestColo = pick.colo;
+        _cfBestHost = host;
+        _cfBestAt = DateTime.now().millisecondsSinceEpoch;
+      });
+      if (_running) await _reapplyRuntime();
+      if (mounted) _show('${tx('已换成', 'Now')} ${pick.ip}');
+    } on CfBestIpException catch (err) {
+      if (mounted) _show('$err');
+    } catch (err) {
+      if (mounted) _show('$err');
+    } finally {
+      if (mounted) setState(() => _cfPicking = false);
+    }
   }
 
   Widget _speedFact(IconData icon, String label, String value) {

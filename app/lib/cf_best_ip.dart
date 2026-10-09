@@ -89,25 +89,40 @@ Future<CfBestIp> pickCloudflareIp({
   void Function(String)? onProgress,
 }) async {
   onProgress?.call('正在解析节点');
+  final dnsFirst = <String>{};
   final candidates = <String>{..._seeds}..removeAll(skip);
   try {
     for (final addr in await InternetAddress.lookup(host, type: InternetAddressType.IPv4)) {
-      if (addr.type == InternetAddressType.IPv4) candidates.add(addr.address);
+      if (addr.type == InternetAddressType.IPv4) {
+        candidates.add(addr.address);
+        dnsFirst.add(addr.address);
+      }
     }
   } catch (_) {}
+  dnsFirst.removeAll(skip);
 
   onProgress?.call('正在扫描 ${candidates.length} 个 Cloudflare IP');
   final ips = candidates.toList();
   final part = await Future.wait(ips.map(_tcpMs));
-  final tcpHits = part.whereType<_TcpHit>().toList()..sort((a, b) => a.ms.compareTo(b.ms));
-  final shortlist = tcpHits.take(4).toList();
-  if (shortlist.isEmpty) {
+  final tcpHits = part.whereType<_TcpHit>().toList()
+    ..sort((a, b) {
+      final ad = dnsFirst.contains(a.ip) ? 0 : 1;
+      final bd = dnsFirst.contains(b.ip) ? 0 : 1;
+      if (ad != bd) return ad.compareTo(bd);
+      return a.ms.compareTo(b.ms);
+    });
+  if (tcpHits.isEmpty) {
     throw const CfBestIpException('没有扫到可用的 Cloudflare IP');
   }
 
-  onProgress?.call('正在验证最快的地址');
-  final winner = await _firstServe(shortlist, host, token, skip);
-  if (winner != null) return winner;
+  // 最快的几个端口通，不代表这个域名能在上面打开。一批不行就再试下一批。
+  final pool = tcpHits.take(16).toList();
+  for (var i = 0; i < pool.length; i += 4) {
+    final wave = pool.sublist(i, i + 4 > pool.length ? pool.length : i + 4);
+    onProgress?.call('正在验证 ${wave.map((hit) => hit.ip).join('、')}');
+    final winner = await _firstServe(wave, host, token, skip);
+    if (winner != null) return winner;
+  }
   throw const CfBestIpException('这些地址连得上端口，但打不开这个节点');
 }
 
@@ -124,7 +139,7 @@ Future<CfBestIp?> _firstServe(List<_TcpHit> shortlist, String host, String token
       if (pending == 0 && !done.isCompleted) done.complete(null);
     }));
   }
-  return done.future.timeout(const Duration(seconds: 2), onTimeout: () => null);
+  return done.future.timeout(const Duration(seconds: 8), onTimeout: () => null);
 }
 
 class CfBestIpException implements Exception {
@@ -152,13 +167,27 @@ Future<_TcpHit?> _tcpMs(String ip) async {
   }
 }
 
-HttpClient _pinned(String ip) {
+HttpClient _pinned(String ip, String host) {
   final client = HttpClient();
   client.findProxy = (_) => 'DIRECT';
-  client.connectionTimeout = const Duration(seconds: 4);
+  client.connectionTimeout = const Duration(seconds: 6);
   client.badCertificateCallback = (_, __, ___) => true;
+  // 自己连到指定地址，再按节点域名做 TLS。否则会把明文送到 443，Cloudflare 直接拒绝。
   client.connectionFactory = (uri, _, __) {
-    return Socket.startConnect(InternetAddress(ip), uri.hasPort ? uri.port : 443);
+    final Future<Socket> future = Socket.connect(
+      InternetAddress(ip),
+      uri.hasPort ? uri.port : 443,
+      timeout: const Duration(seconds: 6),
+    ).then((tcp) {
+      if (uri.scheme != 'https') return tcp;
+      return SecureSocket.secure(
+        tcp,
+        host: host,
+        onBadCertificate: (_) => true,
+        supportedProtocols: const ['http/1.1'],
+      );
+    });
+    return Future<ConnectionTask<Socket>>.value(ConnectionTask.fromSocket(future, () {}));
   };
   return client;
 }
@@ -175,22 +204,27 @@ Future<int?> pingCloudflareIp({required String ip, required String host, require
 }
 
 Future<CfBestIp?> _serveHost(String ip, String host, String token) async {
-  final client = _pinned(ip);
+  final client = _pinned(ip, host);
   final watch = Stopwatch()..start();
   try {
-    final path = token.isEmpty ? '/cdn-cgi/trace' : '/rsq/v1/health';
-    final request = await client.getUrl(Uri.https(host, path)).timeout(const Duration(seconds: 5));
-    if (token.isNotEmpty) {
-      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
-    }
-    final response = await request.close().timeout(const Duration(seconds: 5));
-    final body = await response.transform(utf8.decoder).join().timeout(const Duration(seconds: 4));
-    if (token.isNotEmpty) {
-      if (response.statusCode != 200) return null;
-      return CfBestIp(ip: ip, ms: watch.elapsedMilliseconds);
-    }
-    if (!body.contains('colo=')) return null;
+    // 先确认这个地址真的在为该域名服务。橙云回源和 Worker 都能从这里看到机房。
+    final trace = await client.getUrl(Uri.https(host, '/cdn-cgi/trace')).timeout(const Duration(seconds: 6));
+    final traced = await trace.close().timeout(const Duration(seconds: 6));
+    final body = await traced.transform(utf8.decoder).join().timeout(const Duration(seconds: 4));
+    if (traced.statusCode != 200 || !body.contains('colo=')) return null;
     final colo = RegExp(r'colo=([A-Z0-9]+)').firstMatch(body)?.group(1) ?? '';
+    if (token.isNotEmpty) {
+      try {
+        final health = await client.getUrl(Uri.https(host, '/rsq/v1/health')).timeout(const Duration(seconds: 6));
+        health.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+        final checked = await health.close().timeout(const Duration(seconds: 6));
+        await checked.drain<void>();
+        // 401 是令牌问题。404 说明这个域名上没有节点。
+        if (checked.statusCode == 404) return null;
+      } catch (_) {
+        // 边缘已经认出这个域名，健康检查超时仍保留这条地址。
+      }
+    }
     return CfBestIp(ip: ip, ms: watch.elapsedMilliseconds, colo: colo);
   } catch (_) {
     return null;

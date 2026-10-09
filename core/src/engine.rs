@@ -578,7 +578,7 @@ pub(crate) async fn dial_h3(
         .stream_receive_window(quinn::VarInt::from_u32(8 * 1024 * 1024))
         .receive_window(quinn::VarInt::from_u32(32 * 1024 * 1024))
         .send_window(16 * 1024 * 1024)
-        .initial_rtt(Duration::from_millis(200))
+        .initial_rtt(Duration::from_millis(300))
         .congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));
     client.transport_config(Arc::new(transport));
     let mut endpoint = quinn::Endpoint::client(bind).map_err(|err| format!("UDP 套接字失败: {err}"))?;

@@ -283,7 +283,10 @@ impl Lanes {
     }
 
     fn label(&self) -> &'static str {
-        if self.prefer_h3 && self.h3_up() && self.h3_lane.healthy() {
+        if self.web_prefers_h2() {
+            return "h2";
+        }
+        if self.prefer_h3 && self.h3_up() && self.h3_lane.healthy() && !self.web_should_compare() {
             return "h3";
         }
         let picked = self.picked.load(Ordering::Relaxed);
@@ -295,6 +298,10 @@ impl Lanes {
 
     fn commit_web(&self, id: u8, elapsed: Duration) {
         self.lane(id).note_ok(elapsed);
+        if self.web_prefers_h2() {
+            self.picked.store(1, Ordering::Relaxed);
+            return;
+        }
         if self.prefer_h3 && self.h3_up() && self.h3_lane.healthy() {
             self.picked.store(0, Ordering::Relaxed);
             return;
@@ -323,7 +330,33 @@ impl Lanes {
         }
     }
 
+    /// HTTP/3 只是能通，但打开流明显比 HTTP/2 慢时，网页改走 HTTP/2。
+    fn web_prefers_h2(&self) -> bool {
+        let h3 = self.h3_lane.ewma_ms.load(Ordering::Relaxed);
+        let h2 = self.h2_lane.ewma_ms.load(Ordering::Relaxed);
+        h2 > 0 && h3 > 0 && h2.saturating_add(80) < h3
+    }
+
+    /// 还没比出谁快，或者 HTTP/3 已经偏慢但 HTTP/2 还没样本。这时不要钉死在 HTTP/3。
+    fn web_should_compare(&self) -> bool {
+        if self.web_prefers_h2() {
+            return false;
+        }
+        let h3 = self.h3_lane.ewma_ms.load(Ordering::Relaxed);
+        let h2 = self.h2_lane.ewma_ms.load(Ordering::Relaxed);
+        if h3 > 0 && h2 > 0 {
+            return false;
+        }
+        if self.prefer_h3 && h3 > 0 && h3 <= 350 {
+            return false;
+        }
+        true
+    }
+
     fn order_web(&self) -> Vec<u8> {
+        if self.web_prefers_h2() {
+            return self.fixed(&[1, 0, 2]);
+        }
         if self.prefer_h3 {
             return self.fixed(&[0, 1, 2]);
         }
@@ -372,7 +405,11 @@ async fn open_spread(cfg: Config, job: Job, lanes: Arc<Lanes>, stats: Arc<Stats>
         crate::ws::open(cfg, host, port, reply).await;
         return;
     }
-    let proven = lanes.lane(order[0]).healthy() && lanes.lane(order[0]).ewma_ms.load(Ordering::Relaxed) > 0;
+    let proven = if stream {
+        lanes.lane(order[0]).healthy() && lanes.lane(order[0]).ewma_ms.load(Ordering::Relaxed) > 0
+    } else {
+        !lanes.web_should_compare() && lanes.lane(order[0]).healthy() && lanes.lane(order[0]).ewma_ms.load(Ordering::Relaxed) > 0
+    };
     let leftover = if proven {
         open_in_order(&cfg, &host, port, &order, stream, &lanes, &stats, reply).await
     } else {
@@ -436,7 +473,7 @@ async fn open_raced(
     let mut pending = 0u8;
     for (index, id) in order.iter().copied().enumerate() {
         pending += 1;
-        let delay = Duration::from_millis(600) * index as u32;
+        let delay = Duration::from_millis(180) * index as u32;
         let lanes = lanes.clone();
         let cfg = cfg.clone();
         let host = host.to_string();
