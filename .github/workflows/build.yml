@@ -57,12 +57,12 @@ jobs:
           if (-not $iscc) { throw "找不到 ISCC.exe" }
           & $iscc tool\crush-vpn.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (-not (Test-Path dist\跳跳猴-Setup.exe)) { throw "没有生成安装包" }
-          Get-Item dist\跳跳猴-Setup.exe | Select-Object FullName, Length
+          if (-not (Test-Path dist\tiaotiaohou-Setup.exe)) { throw "没有生成安装包" }
+          Get-Item dist\tiaotiaohou-Setup.exe | Select-Object FullName, Length
       - uses: actions/upload-artifact@v4
         with:
           name: tiaotiaohou-setup
-          path: dist/跳跳猴-Setup.exe
+          path: dist/tiaotiaohou-Setup.exe
           if-no-files-found: error
       - name: Publish installer
         if: github.event_name != 'pull_request'
@@ -72,6 +72,6 @@ jobs:
           name: 跳跳猴 Windows 安装包
           allowUpdates: true
           replacesArtifacts: true
-          artifacts: dist/跳跳猴-Setup.exe
-          body: 下载 跳跳猴-Setup.exe，双击即可安装。
+          artifacts: dist/tiaotiaohou-Setup.exe
+          body: 下载 tiaotiaohou-Setup.exe，双击即可安装。
           token: ${{ secrets.GITHUB_TOKEN }}
