@@ -16,3 +16,61 @@ jobs:
       - name: Test
         working-directory: core
         run: cargo test --locked
+
+  windows:
+    name: Windows 安装包
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+      - name: Build core and app
+        shell: pwsh
+        run: |
+          cargo build --release --locked --manifest-path core/Cargo.toml
+          flutter config --enable-windows-desktop
+          Set-Location app
+          flutter pub get
+          flutter build windows --release
+          Set-Location ..
+          Copy-Item core\target\release\rsq_core.dll app\build\windows\x64\runner\Release\rsq_core.dll -Force
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+      - name: Package installer
+        shell: pwsh
+        run: |
+          $iscc = @(
+            "$env:ProgramFiles\Inno Setup 7\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { throw "找不到 ISCC.exe" }
+          & $iscc tool\crush-vpn.iss
+          if (-not (Test-Path dist\跳跳猴-Setup.exe)) { throw "没有生成安装包" }
+          Get-Item dist\跳跳猴-Setup.exe | Select-Object FullName, Length
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tiaotiaohou-setup
+          path: dist/跳跳猴-Setup.exe
+          if-no-files-found: error
+      - name: Publish installer
+        if: github.event_name != 'pull_request'
+        uses: ncipollo/release-action@v1
+        with:
+          tag: windows
+          name: 跳跳猴 Windows 安装包
+          allowUpdates: true
+          replacesArtifacts: true
+          artifacts: dist/跳跳猴-Setup.exe
+          body: 下载 跳跳猴-Setup.exe，双击即可安装。
+          token: ${{ secrets.GITHUB_TOKEN }}
