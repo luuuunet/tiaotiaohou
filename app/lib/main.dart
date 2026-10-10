@@ -297,7 +297,7 @@ class _HomePageState extends State<HomePage> {
         return;
       }
       if (_systemProxy) {
-        final proxyError = await SystemProxy.enable(_http, bypass: _bypass);
+        final proxyError = await SystemProxy.enable(_http, bypass: _bypass, socksPort: _socks);
         _appliedProxy = proxyError == null;
       }
     } catch (_) {}
@@ -487,7 +487,7 @@ class _HomePageState extends State<HomePage> {
     if (phase == 'up') {
       if (_closing) return;
       if (_systemProxy && !_appliedProxy) {
-        final proxyError = await SystemProxy.enable(_http, bypass: _bypass);
+        final proxyError = await SystemProxy.enable(_http, bypass: _bypass, socksPort: _socks);
         if (_closing) {
           await SystemProxy.clearLocal();
           return;
@@ -661,6 +661,7 @@ class _HomePageState extends State<HomePage> {
           children: [
             _SideBar(
               selected: _nav,
+              compact: MediaQuery.sizeOf(context).width < 960,
               onSelect: (index) {
                 setState(() => _nav = index);
                 if (index == 0) unawaited(_refreshNodes());
@@ -746,7 +747,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _onSessionUnlock() async {
     if (!mounted || _closing || !_running || !_systemProxy) return;
-    final proxyError = await SystemProxy.enable(_http, bypass: _bypass);
+    final proxyError = await SystemProxy.enable(_http, bypass: _bypass, socksPort: _socks);
     _appliedProxy = proxyError == null;
   }
 
@@ -923,43 +924,47 @@ class _HomePageState extends State<HomePage> {
     final name = _nodeName.isEmpty ? (host.isEmpty ? '还没有节点' : '未命名节点') : _nodeName;
     final connecting = _busy || _status == '正在重连';
     final action = connecting ? _showStatus(_status) : (_running ? tx('断开', 'Stop') : tx('开始连接', 'Connect'));
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 24, 40, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const YouBadge('YOU'),
-          const SizedBox(height: 10),
-          Text(_headline, style: kDisplay.copyWith(fontSize: 44)),
-          if (!_running && !_busy) ...[
-            const SizedBox(height: 4),
-            Text(_showStatus(_status), style: const TextStyle(color: kMute, fontSize: 18, fontWeight: FontWeight.w700)),
-          ],
-          const SizedBox(height: 8),
-          const MintLine(),
-          const SizedBox(height: 16),
-          Row(
+    return LayoutBuilder(
+      builder: (context, box) {
+        final short = box.maxHeight < 660;
+        final narrow = box.maxWidth < 700;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(narrow ? 20 : 32, short ? 16 : 24, narrow ? 20 : 40, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const AppIcon('link.svg', size: 16),
-              const SizedBox(width: 6),
-              Text(tx('选择节点', 'Nodes'), style: const TextStyle(color: kInk, fontWeight: FontWeight.w800, fontSize: 15)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _nodeStrip(),
-          const SizedBox(height: 10),
-          SupportStrip(exitVia: host.isEmpty ? '' : _exitVia, udp: host.isNotEmpty && _udpReady),
-          const SizedBox(height: 8),
-          if (host.isEmpty) ...[
-            Text(tx('还没有节点，请先在设置里添加', 'No node yet. Add one in settings.'), style: const TextStyle(color: kMute, fontSize: 15, height: 1.4)),
-            const SizedBox(height: 2),
-            Text(tx('特别感谢 Cloudflare 的支持', 'Thanks to Cloudflare'), style: const TextStyle(color: kMute, fontSize: 15, height: 1.4)),
-          ] else if (_running && _udpReady)
-            Text('${tx('游戏用', 'Games')} 127.0.0.1:$_socks', style: const TextStyle(color: kMute, fontSize: 15, height: 1.4)),
-          const Spacer(),
-          TicketShell(
-            height: 272,
-            onTap: _toggle,
+              const YouBadge('YOU'),
+              SizedBox(height: short ? 6 : 10),
+              Text(_headline, style: kDisplay.copyWith(fontSize: short ? 32 : 44)),
+              if (!_running && !_busy) ...[
+                const SizedBox(height: 4),
+                Text(_showStatus(_status), style: const TextStyle(color: kMute, fontSize: 18, fontWeight: FontWeight.w700)),
+              ],
+              SizedBox(height: short ? 6 : 8),
+              MintLine(width: short ? 120 : 168),
+              SizedBox(height: short ? 10 : 16),
+              Row(
+                children: [
+                  const AppIcon('link.svg', size: 16),
+                  const SizedBox(width: 6),
+                  Text(tx('选择节点', 'Nodes'), style: const TextStyle(color: kInk, fontWeight: FontWeight.w800, fontSize: 15)),
+                ],
+              ),
+              const SizedBox(height: 10),
+              _nodeStrip(),
+              const SizedBox(height: 10),
+              SupportStrip(exitVia: host.isEmpty ? '' : _exitVia, udp: host.isNotEmpty && _udpReady),
+              const SizedBox(height: 8),
+              if (host.isEmpty) ...[
+                Text(tx('还没有节点，请先在设置里添加', 'No node yet. Add one in settings.'), style: const TextStyle(color: kMute, fontSize: 15, height: 1.4)),
+                const SizedBox(height: 2),
+                Text(tx('特别感谢 Cloudflare 的支持', 'Thanks to Cloudflare'), style: const TextStyle(color: kMute, fontSize: 15, height: 1.4)),
+              ] else if (_running && _udpReady)
+                Text('${tx('游戏用', 'Games')} 127.0.0.1:$_socks', style: const TextStyle(color: kMute, fontSize: 15, height: 1.4)),
+              const SizedBox(height: 12),
+              Expanded(
+                child: TicketShell(
+                  onTap: _toggle,
             stub: GoldStub(
               kicker: _running ? 'ON' : 'OFF',
               big: _running ? '开' : '关',
@@ -1014,7 +1019,7 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     const AppIcon('power.svg', size: 26),
                     const SizedBox(width: 10),
-                    Text(action, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800, height: 1, color: kInk)),
+                    Text(action, style: TextStyle(fontSize: short ? 28 : 36, fontWeight: FontWeight.w800, height: 1, color: kInk)),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -1025,7 +1030,8 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             ),
-          ),
+                ),
+              ),
           const SizedBox(height: 10),
           _InfoCard(
             up: _up,
@@ -1035,8 +1041,10 @@ class _HomePageState extends State<HomePage> {
             quota: _quotaShort,
             quotaWarn: _quotaWarn,
           ),
-        ],
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -1255,10 +1263,11 @@ class _HomePageState extends State<HomePage> {
 }
 
 class _SideBar extends StatelessWidget {
-  const _SideBar({required this.selected, required this.onSelect});
+  const _SideBar({required this.selected, required this.onSelect, this.compact = false});
 
   final int selected;
   final ValueChanged<int> onSelect;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1270,9 +1279,9 @@ class _SideBar extends StatelessWidget {
       ('settings.svg', tx('本机', 'Device')),
     ];
     return SizedBox(
-      width: 188,
+      width: compact ? 156 : 188,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 22, 12, 18),
+        padding: EdgeInsets.fromLTRB(compact ? 12 : 16, 22, compact ? 8 : 12, 18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1280,10 +1289,18 @@ class _SideBar extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: Image.asset('assets/logo.png', width: 36, height: 36, fit: BoxFit.cover),
+                  child: Image.asset(
+                    'assets/logo.png',
+                    width: 36,
+                    height: 36,
+                    fit: BoxFit.cover,
+                    filterQuality: FilterQuality.high,
+                  ),
                 ),
                 const SizedBox(width: 10),
-                const Text('跳跳猴', style: TextStyle(color: kInk, fontSize: 20, fontWeight: FontWeight.w800)),
+                const Flexible(
+                  child: Text('跳跳猴', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: kInk, fontSize: 20, fontWeight: FontWeight.w800)),
+                ),
               ],
             ),
             const SizedBox(height: 28),
@@ -2010,14 +2027,17 @@ class _SettingsPageState extends State<SettingsPage> {
     if (widget.panel == 0) {
       return const SizedBox.shrink();
     }
+    final size = MediaQuery.sizeOf(context);
+    final short = size.height < 680;
+    final narrow = size.width < 960;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(36, 40, 48, 24),
+      padding: EdgeInsets.fromLTRB(narrow ? 20 : 36, short ? 28 : 40, narrow ? 20 : 48, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const YouBadge('SET'),
           const SizedBox(height: 18),
-          Text('${titles[widget.panel]}.', style: kDisplay.copyWith(fontSize: 34)),
+          Text('${titles[widget.panel]}.', style: kDisplay.copyWith(fontSize: short ? 26 : 34)),
           const SizedBox(height: 8),
           const MintLine(width: 120),
           const SizedBox(height: 12),
@@ -2529,7 +2549,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _switchRow(tx('国内网站直连', 'China sites direct'), _ruleMode, (value) => setState(() => _ruleMode = value), icon: 'cloud.svg', hint: tx('百度、淘宝不走代理', 'Baidu and Taobao stay direct')),
         _switchRow(tx('掉线自动换节点', 'Switch node if down'), _autoFailover, (value) => setState(() => _autoFailover = value), icon: 'share-2.svg', hint: tx('这条不行就换下一条', 'Try the next node')),
         _switchRow(tx('断了先拦住', 'Hold if dropped'), _holdTraffic, (value) => setState(() => _holdTraffic = value), icon: 'shield.svg', hint: tx('掉线不走真实网络', 'Do not leak when down')),
-        if (Autostart.supported) _switchRow(tx('开机自启', 'Start with Windows'), _launchAtStartup, (value) => setState(() => _launchAtStartup = value), icon: 'key-round.svg', hint: tx('开机静默连上，换网也会恢复', 'Connect quietly at startup')),
+        if (Autostart.supported) _switchRow(tx('开机自启', 'Open at login'), _launchAtStartup, (value) => setState(() => _launchAtStartup = value), icon: 'key-round.svg', hint: tx('开机静默连上，换网也会恢复', 'Connect quietly at startup')),
         const SizedBox(height: 6),
         Text(tx('不走代理的网址', 'Sites that skip the proxy'), style: const TextStyle(color: kInk, fontWeight: FontWeight.w800, fontSize: 12)),
         const SizedBox(height: 6),

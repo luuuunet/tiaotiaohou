@@ -9,6 +9,8 @@ mod relay;
 mod socks;
 mod stats;
 mod vps;
+#[cfg(target_os = "macos")]
+mod macos_trust;
 #[cfg(windows)]
 mod windows_trust;
 mod ws;

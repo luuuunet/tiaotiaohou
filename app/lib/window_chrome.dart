@@ -33,7 +33,7 @@ class WindowShell extends StatelessWidget {
       child: Stack(
         children: [
           child,
-          const Positioned(top: 0, left: 0, right: 118, height: 42, child: _DragStrip()),
+          const Positioned(top: 0, left: 0, right: 150, height: 42, child: _DragStrip()),
           const Positioned(top: 10, right: 10, child: WindowButtons()),
         ],
       ),
@@ -49,6 +49,7 @@ class _DragStrip extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onPanStart: (_) => _host.invokeMethod<void>('drag'),
+      onDoubleTap: Platform.isMacOS ? null : () => _host.invokeMethod<void>('zoom'),
     );
   }
 }
@@ -72,6 +73,21 @@ class WindowButtons extends StatelessWidget {
           onTap: () => _host.invokeMethod<void>('minimize'),
           child: Container(width: 11, height: 2, color: kInk),
         ),
+        if (!Platform.isMacOS) ...[
+          const SizedBox(width: 8),
+          _WinDot(
+            fill: Colors.white,
+            hover: kGold,
+            ink: kInk,
+            tooltip: tx('放大', 'Zoom'),
+            onTap: () => _host.invokeMethod<void>('zoom'),
+            child: Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(border: Border.all(color: kInk, width: 1.6), borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+        ],
         const SizedBox(width: 8),
         _WinDot(
           fill: kInk,
@@ -79,6 +95,10 @@ class WindowButtons extends StatelessWidget {
           ink: Colors.white,
           tooltip: tx('关闭', 'Close'),
           onTap: () async {
+            if (Platform.isMacOS) {
+              await DesktopHost.hideToTray();
+              return;
+            }
             try {
               await WindowChrome.beforeQuit?.call();
             } catch (_) {}

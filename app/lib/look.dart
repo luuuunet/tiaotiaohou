@@ -85,12 +85,12 @@ class MintLine extends StatelessWidget {
 }
 
 class TicketShell extends StatelessWidget {
-  const TicketShell({super.key, required this.child, required this.stub, this.onTap, this.height = 210});
+  const TicketShell({super.key, required this.child, required this.stub, this.onTap, this.height});
 
   final Widget child;
   final Widget stub;
   final VoidCallback? onTap;
-  final double height;
+  final double? height;
 
   @override
   Widget build(BuildContext context) {
@@ -101,6 +101,7 @@ class TicketShell extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         child: Container(
           height: height,
+          constraints: const BoxConstraints(minHeight: 210),
           decoration: kTicket,
           clipBehavior: Clip.antiAlias,
           child: Row(

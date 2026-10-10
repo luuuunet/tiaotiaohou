@@ -365,12 +365,17 @@ pub fn ensure_trusted_ca() -> Result<(), String> {
 }
 
 pub fn remove_trusted_ca() -> Result<(), String> {
-    if !cfg!(windows) {
+    if !cfg!(windows) && !cfg!(target_os = "macos") {
         return Ok(());
     }
     let der = current_ca_der();
     #[cfg(windows)]
     crate::windows_trust::untrust_root(der.as_deref(), &["跳跳猴", "Crush VPN"])?;
+    #[cfg(target_os = "macos")]
+    {
+        let pem = ca_dir().join("ca-cert.pem");
+        crate::macos_trust::untrust_root(der.is_some().then_some(pem.as_path()), &["跳跳猴", "Crush VPN"])?;
+    }
     let marker = ca_dir().join("ca-trusted.txt");
     let _ = std::fs::remove_file(marker);
     Ok(())
@@ -417,7 +422,7 @@ fn load_or_create_ca() -> Result<(rcgen::Certificate, KeyPair), String> {
 }
 
 fn install_ca(der: &[u8]) -> Result<(), String> {
-    if !cfg!(windows) {
+    if !cfg!(windows) && !cfg!(target_os = "macos") {
         return Ok(());
     }
     let marker = ca_dir().join("ca-trusted.txt");
@@ -426,6 +431,9 @@ fn install_ca(der: &[u8]) -> Result<(), String> {
     }
     #[cfg(windows)]
     crate::windows_trust::trust_root(der)?;
+    #[cfg(target_os = "macos")]
+    crate::macos_trust::trust_pem(&ca_dir().join("ca-cert.pem"))?;
+    let _ = der;
     let _ = std::fs::write(&marker, "4");
     Ok(())
 }

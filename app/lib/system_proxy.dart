@@ -4,15 +4,15 @@ import 'dart:io';
 import 'package:ffi/ffi.dart';
 
 class SystemProxy {
-  static Future<String?> enable(int port, {List<String> bypass = const []}) async {
+  static Future<String?> enable(int port, {List<String> bypass = const [], int socksPort = 1080}) async {
     if (Platform.isWindows) return _windows(true, port, bypass);
-    if (Platform.isMacOS) return _mac(true, port, bypass);
+    if (Platform.isMacOS) return _mac(true, port, bypass, socksPort);
     return '这个系统要用应用自己的代理设置，地址是 127.0.0.1:$port';
   }
 
   static Future<String?> disable(int port) async {
     if (Platform.isWindows) return _windows(false, port, const []);
-    if (Platform.isMacOS) return _mac(false, port, const []);
+    if (Platform.isMacOS) return _mac(false, port, const [], 0);
     return null;
   }
 
@@ -196,8 +196,8 @@ class SystemProxy {
         .toList();
   }
 
-  static Future<({bool enabled, String server, String port})?> _macWebProxy(String service) async {
-    final result = await Process.run('networksetup', ['-getwebproxy', service]);
+  static Future<({bool enabled, String server, String port})?> _macProxy(String service, String flag) async {
+    final result = await Process.run('networksetup', [flag, service]);
     if (result.exitCode != 0) return null;
     var enabled = false;
     var server = '';
@@ -211,6 +211,14 @@ class SystemProxy {
     return (enabled: enabled, server: server, port: port);
   }
 
+  static Future<({bool enabled, String server, String port})?> _macWebProxy(String service) {
+    return _macProxy(service, '-getwebproxy');
+  }
+
+  static Future<({bool enabled, String server, String port})?> _macSocksProxy(String service) {
+    return _macProxy(service, '-getsocksfirewallproxy');
+  }
+
   static bool _isLocalProxy(String server) {
     final host = server.toLowerCase();
     return host == '127.0.0.1' || host == 'localhost';
@@ -219,7 +227,10 @@ class SystemProxy {
   static Future<void> _macClearLocal() async {
     for (final service in await _macServices()) {
       final proxy = await _macWebProxy(service);
-      if (proxy != null && proxy.enabled && _isLocalProxy(proxy.server)) {
+      final socks = await _macSocksProxy(service);
+      final webOurs = proxy != null && proxy.enabled && _isLocalProxy(proxy.server);
+      final socksOurs = socks != null && socks.enabled && _isLocalProxy(socks.server);
+      if (webOurs || socksOurs) {
         await _macOff(service);
       }
     }
@@ -228,7 +239,10 @@ class SystemProxy {
   static Future<void> _macClearPort(int port) async {
     for (final service in await _macServices()) {
       final proxy = await _macWebProxy(service);
-      if (proxy != null && proxy.enabled && _isLocalProxy(proxy.server) && (port == 0 || proxy.port == '$port')) {
+      final socks = await _macSocksProxy(service);
+      final webOurs = proxy != null && proxy.enabled && _isLocalProxy(proxy.server) && (port == 0 || proxy.port == '$port');
+      final socksOurs = socks != null && socks.enabled && _isLocalProxy(socks.server);
+      if (webOurs || socksOurs) {
         await _macOff(service);
       }
     }
@@ -237,9 +251,10 @@ class SystemProxy {
   static Future<void> _macOff(String service) async {
     await Process.run('networksetup', ['-setwebproxystate', service, 'off']);
     await Process.run('networksetup', ['-setsecurewebproxystate', service, 'off']);
+    await Process.run('networksetup', ['-setsocksfirewallproxystate', service, 'off']);
   }
 
-  static Future<String?> _mac(bool enable, int port, List<String> bypass) async {
+  static Future<String?> _mac(bool enable, int port, List<String> bypass, int socksPort) async {
     final services = await _macServices();
     if (services.isEmpty) return '没有可设置的网络服务';
     if (!enable) {
@@ -261,6 +276,9 @@ class SystemProxy {
       final web = await Process.run('networksetup', ['-setwebproxy', service, '127.0.0.1', '$port']);
       final secure = await Process.run('networksetup', ['-setsecurewebproxy', service, '127.0.0.1', '$port']);
       if (web.exitCode != 0 || secure.exitCode != 0) continue;
+      if (socksPort > 0) {
+        await Process.run('networksetup', ['-setsocksfirewallproxy', service, '127.0.0.1', '$socksPort']);
+      }
       await Process.run('networksetup', ['-setproxybypassdomains', service, ...domains]);
       ok++;
     }

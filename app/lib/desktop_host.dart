@@ -7,7 +7,7 @@ class DesktopHost {
   DesktopHost._();
 
   static const channel = MethodChannel('dev.rsq/host');
-  static bool get supported => Platform.isWindows;
+  static bool get supported => Platform.isWindows || Platform.isMacOS;
 
   static Future<void> hideToTray() async {
     if (!supported) return;
@@ -20,10 +20,11 @@ class DesktopHost {
   }
 
   static Future<void> quit() async {
-    if (!supported) {
-      exit(0);
+    if (Platform.isWindows || Platform.isMacOS) {
+      await channel.invokeMethod<void>('quit');
+      return;
     }
-    await channel.invokeMethod<void>('quit');
+    exit(0);
   }
 
   static Future<void> setTrayTip(String text) async {

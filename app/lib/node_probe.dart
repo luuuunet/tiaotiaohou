@@ -87,6 +87,8 @@ class SpeedSample {
   final String label;
 }
 
+int _ms(String raw) => double.parse(raw).round();
+
 String formatSpeed(int bytes, double seconds) {
   if (seconds <= 0 || bytes <= 0) return '—';
   final mega = bytes / seconds / (1024 * 1024);
@@ -112,7 +114,9 @@ Future<SpeedSample> measurePing(String host) async {
   if (target.isEmpty) return const SpeedSample(ok: false, label: '失败');
   final args = Platform.isWindows
       ? <String>['-n', '3', '-w', '1500', target]
-      : <String>['-c', '3', '-W', '2', target];
+      : Platform.isMacOS
+          ? <String>['-c', '3', '-W', '2000', target]
+          : <String>['-c', '3', '-W', '2', target];
   late final ProcessResult r;
   try {
     r = await Process.run('ping', args).timeout(const Duration(seconds: 8));
@@ -122,10 +126,12 @@ Future<SpeedSample> measurePing(String host) async {
     return const SpeedSample(ok: false, label: '失败');
   }
   final text = '${r.stdout}\n${r.stderr}';
+  final rtt = RegExp(r'round-trip min/avg/max(?:/[a-z]+)? = [\d.]+/([\d.]+)').firstMatch(text);
+  if (rtt != null) return SpeedSample(ok: true, label: '${_ms(rtt.group(1)!)}ms');
   final avg = RegExp(r'(?:Average|平均)\s*=\s*(\d+)').firstMatch(text);
   if (avg != null) return SpeedSample(ok: true, label: '${avg.group(1)}ms');
   final times = <int>[
-    for (final m in RegExp(r'(?:time|时间)\s*[=<]\s*(\d+)').allMatches(text)) int.parse(m.group(1)!),
+    for (final m in RegExp(r'(?:time|时间)\s*[=<]\s*(\d+(?:\.\d+)?)').allMatches(text)) _ms(m.group(1)!),
   ];
   if (times.isEmpty) return const SpeedSample(ok: false, label: '失败');
   times.sort();

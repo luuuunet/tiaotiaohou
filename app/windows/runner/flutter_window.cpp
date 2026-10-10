@@ -130,6 +130,11 @@ bool FlutterWindow::HandleHostMethod(
     result.Success();
     return true;
   }
+  if (name == "zoom") {
+    ShowWindow(hwnd, IsZoomed(hwnd) ? SW_RESTORE : SW_MAXIMIZE);
+    result.Success();
+    return true;
+  }
   if (name == "hideToTray" || name == "close") {
     HideToTray();
     result.Success();

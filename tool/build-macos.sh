@@ -10,3 +10,4 @@ flutter config --enable-macos-desktop
 flutter pub get
 flutter build macos --release
 echo "built app/build/macos/Build/Products/Release/rsq.app"
+sh "$ROOT/tool/package-macos-dmg.sh"

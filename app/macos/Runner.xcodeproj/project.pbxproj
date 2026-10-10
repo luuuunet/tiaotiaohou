@@ -314,7 +314,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "CORE=\"$PROJECT_DIR/../../core/target/release/librsq_core.dylib\"\nif [ ! -f \"$CORE\" ]; then\n  echo \"缺少 $CORE，先在 core 目录执行 cargo build --release\"\n  exit 1\nfi\nDEST=\"$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app/Contents/MacOS\"\nmkdir -p \"$DEST\"\ncp \"$CORE\" \"$DEST/librsq_core.dylib\"\ninstall_name_tool -id \"@executable_path/librsq_core.dylib\" \"$DEST/librsq_core.dylib\"\n";
+			shellScript = "CORE=\"$PROJECT_DIR/../../core/target/release/librsq_core.dylib\"\nif [ ! -f \"$CORE\" ]; then\n  echo \"缺少 $CORE，先在 core 目录执行 cargo build --release\"\n  exit 1\nfi\nDEST=\"$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app/Contents/MacOS\"\nmkdir -p \"$DEST\"\ncp \"$CORE\" \"$DEST/librsq_core.dylib\"\ninstall_name_tool -id \"@executable_path/librsq_core.dylib\" \"$DEST/librsq_core.dylib\"\ncodesign --force --sign - --timestamp=none \"$DEST/librsq_core.dylib\"\nICON=\"$PROJECT_DIR/Runner/AppIcon.icns\"\nif [ -f \"$ICON\" ]; then\n  mkdir -p \"$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app/Contents/Resources\"\n  cp \"$ICON\" \"$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app/Contents/Resources/AppIcon.icns\"\nfi\n";
 		};
 		3399D490228B24CF009A79C7 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -486,7 +486,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -568,7 +568,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
@@ -618,7 +618,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
