@@ -84,3 +84,7 @@ The protocol is **RSQ/1**. One local connection becomes one encrypted request. T
 - **HTTP/3**: default. TLS 1.3 over QUIC, for web and video.
 - **HTTP/2**: used when UDP is blocked, or when video is steadier on this path.
 - **HTTP/1**: the fallback when the other two do not connect.
+
+## License
+
+This software is provided under the [MIT License](LICENSE). You may use, copy, and modify it free of charge. Keep the copyright notice. It is provided as is, without warranty.
