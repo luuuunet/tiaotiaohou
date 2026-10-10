@@ -78,6 +78,11 @@ class VpsSetup {
     required String token,
     required int requiredPort,
     int sshPort = 22,
+    String certMode = 'self',
+    String domain = '',
+    String cloudflareToken = '',
+    String certificate = '',
+    String privateKey = '',
     void Function(String step)? onStep,
   }) async {
     final ip = publicIpv4(host);
@@ -89,6 +94,15 @@ class VpsSetup {
     }
     if (token.isEmpty || token.length > 256) {
       throw VpsSetupException('连接令牌不合法');
+    }
+    final mode = certMode == 'acme' || certMode == 'own' ? certMode : 'self';
+    if (mode == 'acme') {
+      if (domain.isEmpty) throw VpsSetupException('自动申请证书要先填域名');
+      if (cloudflareToken.trim().isEmpty) throw VpsSetupException('自动申请证书要用 Cloudflare API 令牌');
+    }
+    if (mode == 'own') {
+      final problem = ownCertificateProblem(certificate, privateKey);
+      if (problem != null) throw VpsSetupException(problem);
     }
 
     onStep?.call('正在连接 $ip:22');
@@ -112,9 +126,23 @@ class VpsSetup {
       await _put(client, '/tmp/ttm-landing.py', await rootBundle.loadString('assets/server/landing.py'));
       await _put(client, '/tmp/ttm-install.sh', _installer);
       await _put(client, '/tmp/ttm-token', '$token\n');
+      if (mode == 'own') {
+        onStep?.call('正在上传自有证书');
+        await _put(client, '/tmp/ttm-cert.pem', certificate.trim());
+        await _put(client, '/tmp/ttm-key.pem', privateKey.trim());
+      }
+      if (mode == 'acme') {
+        onStep?.call('正在准备 ACME 申请');
+        await _put(client, '/tmp/ttm-cf.ini', 'dns_cloudflare_api_token = ${cloudflareToken.trim()}\n');
+      }
 
-      onStep?.call('正在服务器上安装并启动');
-      await _exec(client, 'TTM_NEED_PORT=$requiredPort bash /tmp/ttm-install.sh', onStep: onStep);
+      onStep?.call(mode == 'acme' ? '正在申请证书并启动' : '正在服务器上安装并启动');
+      await _exec(
+        client,
+        'TTM_NEED_PORT=$requiredPort TTM_CERT_MODE=$mode TTM_DOMAIN=${_shellQuote(domain)} bash /tmp/ttm-install.sh',
+        onStep: onStep,
+        timeout: mode == 'acme' ? const Duration(minutes: 12) : const Duration(minutes: 8),
+      );
       final used = await _read(client, '/etc/tiaotiaohou/token');
       if (used.isEmpty) {
         throw VpsSetupException('服务器上没有写上连接令牌');
@@ -164,7 +192,7 @@ class VpsSetup {
     }
   }
 
-  Future<void> _exec(SSHClient client, String command, {void Function(String step)? onStep}) async {
+  Future<void> _exec(SSHClient client, String command, {void Function(String step)? onStep, Duration timeout = const Duration(minutes: 8)}) async {
     final session = await client.execute(command);
     final out = StringBuffer();
     final pending = StringBuffer();
@@ -180,7 +208,7 @@ class VpsSetup {
       while (index >= 0) {
         final line = buffer.substring(0, index).trim();
         buffer = buffer.substring(index + 1);
-        if (line.isNotEmpty && !line.toLowerCase().contains('token')) {
+        if (line.isNotEmpty && !_secretLog(line)) {
           onStep?.call(_oneLine(line));
         }
         index = buffer.indexOf('\n');
@@ -193,10 +221,10 @@ class VpsSetup {
     session.stdout.listen(onData, onDone: stdoutDone.complete, onError: stdoutDone.completeError, cancelOnError: true);
     session.stderr.listen(onData, onDone: stderrDone.complete, onError: stderrDone.completeError, cancelOnError: true);
 
-    await session.done.timeout(const Duration(minutes: 8));
+    await session.done.timeout(timeout);
     await Future.wait([stdoutDone.future, stderrDone.future]).timeout(const Duration(seconds: 20));
     final rest = pending.toString().trim();
-    if (rest.isNotEmpty && !rest.toLowerCase().contains('token')) {
+    if (rest.isNotEmpty && !_secretLog(rest)) {
       onStep?.call(_oneLine(rest));
     }
     if ((session.exitCode ?? 1) != 0) {
@@ -217,6 +245,28 @@ class VpsSetup {
     }
     return 'VPS 搭建失败';
   }
+}
+
+bool _secretLog(String line) {
+  final low = line.toLowerCase();
+  return low.contains('token') || low.contains('private key') || low.contains('begin certificate');
+}
+
+String _shellQuote(String value) {
+  return "'${value.replaceAll("'", "'\\''")}'";
+}
+
+/// 自有证书要是 PEM。返回 null 表示可以上传。
+String? ownCertificateProblem(String certificate, String privateKey) {
+  final cert = certificate.trim();
+  final key = privateKey.trim();
+  if (!cert.contains('-----BEGIN CERTIFICATE-----') || !cert.contains('-----END CERTIFICATE-----')) {
+    return '证书要贴完整的 PEM，从 BEGIN CERTIFICATE 到 END CERTIFICATE';
+  }
+  if (!key.contains('PRIVATE KEY-----') || !key.contains('-----END')) {
+    return '私钥要贴完整的 PEM';
+  }
+  return null;
 }
 
 const _installer = r'''
@@ -259,8 +309,57 @@ else
   install -m 0600 /tmp/ttm-token /etc/tiaotiaohou/token
   rm -f /tmp/ttm-token
 fi
-if [ ! -s /etc/tiaotiaohou/cert.pem ] || [ ! -s /etc/tiaotiaohou/key.pem ]; then
-  echo "生成证书"
+mode="${TTM_CERT_MODE:-self}"
+domain="${TTM_DOMAIN:-}"
+if [ "$mode" = "own" ]; then
+  echo "写入自有证书"
+  if [ ! -s /tmp/ttm-cert.pem ] || [ ! -s /tmp/ttm-key.pem ]; then
+    echo "own cert missing" >&2
+    exit 1
+  fi
+  install -m 0644 /tmp/ttm-cert.pem /etc/tiaotiaohou/cert.pem
+  install -m 0600 /tmp/ttm-key.pem /etc/tiaotiaohou/key.pem
+  rm -f /tmp/ttm-cert.pem /tmp/ttm-key.pem
+elif [ "$mode" = "acme" ]; then
+  echo "正在安装 ACME 工具"
+  if ! command -v certbot >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1; then
+      apt-get -o Acquire::ForceIPv4=true update -y || apt-get update -y || true
+      apt-get install -y certbot python3-certbot-dns-cloudflare
+    elif command -v dnf >/dev/null 2>&1; then
+      dnf install -y certbot python3-certbot-dns-cloudflare
+    elif command -v yum >/dev/null 2>&1; then
+      yum install -y certbot python3-certbot-dns-cloudflare
+    else
+      echo "certbot not available" >&2
+      exit 1
+    fi
+  fi
+  if [ -z "$domain" ] || [ ! -s /tmp/ttm-cf.ini ]; then
+    echo "acme needs domain and cloudflare token" >&2
+    exit 1
+  fi
+  install -m 0600 /tmp/ttm-cf.ini /etc/tiaotiaohou/cloudflare.ini
+  rm -f /tmp/ttm-cf.ini
+  echo "正在为 $domain 申请证书"
+  certbot certonly --dns-cloudflare \
+    --dns-cloudflare-credentials /etc/tiaotiaohou/cloudflare.ini \
+    --dns-cloudflare-propagation-seconds 60 \
+    -d "$domain" \
+    --agree-tos --register-unsafely-without-email \
+    --non-interactive --keep-until-expiring
+  install -m 0644 "/etc/letsencrypt/live/$domain/fullchain.pem" /etc/tiaotiaohou/cert.pem
+  install -m 0600 "/etc/letsencrypt/live/$domain/privkey.pem" /etc/tiaotiaohou/key.pem
+  mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+  cat > /etc/letsencrypt/renewal-hooks/deploy/tiaotiaohou.sh <<EOF
+#!/bin/sh
+install -m 0644 "/etc/letsencrypt/live/$domain/fullchain.pem" /etc/tiaotiaohou/cert.pem
+install -m 0600 "/etc/letsencrypt/live/$domain/privkey.pem" /etc/tiaotiaohou/key.pem
+systemctl restart tiaotiaohou-landing.service
+EOF
+  chmod 755 /etc/letsencrypt/renewal-hooks/deploy/tiaotiaohou.sh
+elif [ ! -s /etc/tiaotiaohou/cert.pem ] || [ ! -s /etc/tiaotiaohou/key.pem ]; then
+  echo "生成临时证书"
   openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
     -keyout /etc/tiaotiaohou/key.pem -out /etc/tiaotiaohou/cert.pem \
     -subj "/CN=tiaotiaohou"

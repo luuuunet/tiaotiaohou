@@ -1598,6 +1598,8 @@ class _SettingsPageState extends State<SettingsPage> {
   late final TextEditingController _domain;
   late final TextEditingController _vpsIp;
   late final TextEditingController _vpsPassword;
+  late final TextEditingController _ownCert;
+  late final TextEditingController _ownKey;
   late final TextEditingController _socks;
   late final TextEditingController _http;
   late final TextEditingController _shareIn;
@@ -1623,6 +1625,7 @@ class _SettingsPageState extends State<SettingsPage> {
   var _deploying = false;
   var _deployStatus = '';
   var _setupTab = 0;
+  var _cdnCert = 'acme';
   var _diagBusy = false;
   var _subBusy = false;
   var _subError = '';
@@ -1640,6 +1643,8 @@ class _SettingsPageState extends State<SettingsPage> {
     _domain = TextEditingController();
     _vpsIp = TextEditingController();
     _vpsPassword = TextEditingController();
+    _ownCert = TextEditingController();
+    _ownKey = TextEditingController();
     _socks = TextEditingController(text: '${widget.socks}');
     _http = TextEditingController(text: '${widget.http}');
     _shareIn = TextEditingController();
@@ -1713,6 +1718,8 @@ class _SettingsPageState extends State<SettingsPage> {
     _domain.dispose();
     _vpsIp.dispose();
     _vpsPassword.dispose();
+    _ownCert.dispose();
+    _ownKey.dispose();
     _socks.dispose();
     _http.dispose();
     _shareIn.dispose();
@@ -1816,6 +1823,22 @@ class _SettingsPageState extends State<SettingsPage> {
       _show('先填写 VPS 的 root 密码');
       return;
     }
+    final plan = planDomain(_domain.text);
+    if (plan == null) {
+      _show('域名要像 example.com 或 vpn.example.com');
+      return;
+    }
+    if (_cdnCert == 'own') {
+      final problem = ownCertificateProblem(_ownCert.text, _ownKey.text);
+      if (problem != null) {
+        _show(problem);
+        return;
+      }
+    }
+    if (_apiToken.text.trim().isEmpty) {
+      _show('先填写 Cloudflare API 令牌');
+      return;
+    }
     if (await _sameHostOtherMode(_domain.text, 'cdn')) return;
     setState(() {
       _deploying = true;
@@ -1830,6 +1853,11 @@ class _SettingsPageState extends State<SettingsPage> {
         password: _vpsPassword.text,
         token: newAccessToken(),
         requiredPort: 443,
+        certMode: _cdnCert,
+        domain: plan.hostname,
+        cloudflareToken: _apiToken.text,
+        certificate: _ownCert.text,
+        privateKey: _ownKey.text,
         onStep: _log,
       );
       final node = await CloudflareSetup().bindOrigin(
@@ -1837,6 +1865,7 @@ class _SettingsPageState extends State<SettingsPage> {
         domain: _domain.text,
         originIp: ip,
         accessToken: access,
+        strictOrigin: true,
         onStep: _log,
       );
       final name = _nodeName.text.trim().isEmpty ? suggestedNodeName(node.endpoint, exitVia: 'cdn') : _nodeName.text.trim();
@@ -2302,7 +2331,7 @@ class _SettingsPageState extends State<SettingsPage> {
         const SizedBox(height: 12),
         _guideNote('查找域名失败：令牌权限不够，或域名不在这个账号里。'),
         _guideNote('登录 VPS 失败：本机能连上 22，用户是 root，密码正确。'),
-        _guideNote('橙云节点检查失败：安全组没放行 443，或 443 已被别的程序占用。SSL 保持 Full，不要改成 Full (strict)。'),
+        _guideNote('橙云节点检查失败：安全组没放行 443，或 443 已被别的程序占用。自动申请和自有证书会用严格回源。'),
         _guideNote('有些网站进不去：没有服务器时，到「本机」打开「打开打不开的网站」，然后把浏览器关掉再开。有服务器也可以换成带服务器的两套。'),
         _guideNote('Worker 突然连不上：大约每天 10 万次请求。到「本机」跑一次诊断能看到今天用量。'),
         _guideNote('重连时浏览器会先直连，恢复后代理自动挂回。多条节点时会自动换一条能用的。'),
@@ -2431,17 +2460,48 @@ class _SettingsPageState extends State<SettingsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('橙云回源到这台 VPS 的 443，不部署 Worker。和 Worker 那套的 8444 可以同时开，请换一个域名。', style: TextStyle(color: kMute, height: 1.45)),
+        const Text('自己的域名回源到这台 VPS 的 443。证书可以自动申请，也可以贴你已有的证书。和 Worker 那套的 8444 可以同时开，请换一个域名。', style: TextStyle(color: kMute, height: 1.45)),
         const SizedBox(height: 16),
         _cfFields(),
         const SizedBox(height: 16),
         _vpsFields(),
+        const SizedBox(height: 16),
+        _cdnCertFields(),
         const SizedBox(height: 16),
         FilledButton.icon(
           onPressed: _deploying ? null : _deployCdn,
           icon: const AppIcon('cloud.svg', color: Colors.white, size: 18),
           label: Text(_deploying ? '正在搭建' : '搭建橙云 + 服务器'),
         ),
+      ],
+    );
+  }
+
+  Widget _cdnCertFields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('证书', style: TextStyle(color: kInk, fontWeight: FontWeight.w800, fontSize: 14)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            InkChip(label: '自动申请', selected: _cdnCert == 'acme', onTap: _deploying ? null : () => setState(() => _cdnCert = 'acme')),
+            InkChip(label: '自己的证书', selected: _cdnCert == 'own', onTap: _deploying ? null : () => setState(() => _cdnCert = 'own')),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _cdnCert == 'acme' ? '用 Cloudflare 的域名记录自动申请，到期会续上。' : '把证书和私钥整段贴进来。证书要包含这个域名。',
+          style: const TextStyle(color: kMute, height: 1.4, fontSize: 12),
+        ),
+        if (_cdnCert == 'own') ...[
+          const SizedBox(height: 12),
+          TicketField(label: '证书 PEM', hint: '-----BEGIN CERTIFICATE-----', controller: _ownCert, minLines: 4, maxLines: 8),
+          const SizedBox(height: 12),
+          TicketField(label: '私钥 PEM', controller: _ownKey, minLines: 4, maxLines: 8, obscure: true),
+        ],
       ],
     );
   }

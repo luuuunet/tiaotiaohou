@@ -15,6 +15,14 @@ void main() {
     expect(publicIpv4(''), isNull);
   });
 
+  test('own certificate must be pem', () {
+    expect(ownCertificateProblem('nope', 'nope'), contains('证书'));
+    expect(
+      ownCertificateProblem('-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----', '-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----'),
+      isNull,
+    );
+  });
+
   test('maps remote install errors', () {
     expect(describeRemoteInstall('python3: command not found'), contains('python3'));
     expect(describeRemoteInstall('landing did not listen on 8444'), contains('8444'));

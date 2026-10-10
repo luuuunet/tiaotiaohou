@@ -51,7 +51,7 @@ Each row shows the path: Cloudflare direct, orange cloud + server, or Worker + l
 
 ![Setup](docs/setup.png)
 
-If you have a server, use the recommended **Orange cloud + server**. Fill in the token, domain, public IP, and root password, then tap **Set up**. The rest is automatic.
+If you have a server, use the recommended **Orange cloud + server**. Fill in the token, domain, public IP, and root password. The certificate can be **requested automatically**, or you can paste **your own certificate**. Tap **Set up**. The rest is automatic.
 
 | | Path | For |
 | --- | --- | --- |

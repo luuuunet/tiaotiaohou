@@ -113,6 +113,7 @@ class CloudflareSetup {
     required String domain,
     required String originIp,
     String? accessToken,
+    bool strictOrigin = false,
     void Function(String step)? onStep,
   }) async {
     final token = apiToken.trim();
@@ -145,8 +146,8 @@ class CloudflareSetup {
     onStep?.call('正在把 ${plan.hostname} 橙云指到服务器');
     await api.upsertProxiedA(zoneId, plan.hostname, ip);
 
-    onStep?.call('正在打开 HTTP/3 和灵活回源');
-    await api.patchZoneSetting(zoneId, 'ssl', 'full');
+    onStep?.call(strictOrigin ? '正在打开 HTTP/3 和严格回源' : '正在打开 HTTP/3 和回源');
+    await api.patchZoneSetting(zoneId, 'ssl', strictOrigin ? 'strict' : 'full');
     await api.patchZoneSetting(zoneId, 'http3', 'on');
     await api.patchZoneSetting(zoneId, 'always_use_https', 'on');
 
