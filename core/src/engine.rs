@@ -897,7 +897,7 @@ mod live {
         let raw = std::fs::read_to_string("../worker/.dev.vars").expect("token");
         let token = raw.trim().trim_start_matches("RSQ_TOKEN=").trim().to_string();
         let cfg = Config::parse(&format!(
-            r#"{{"endpoint":"https://rsq.lumono.site","token":"{token}","socks_port":11081,"http_port":18081}}"#
+            r#"{{"endpoint":"https://vpn.example.com","token":"{token}","socks_port":11081,"http_port":18081}}"#
         ))
         .unwrap();
         let (mut driver, mut send) = dial_h3(&cfg).await.expect("h3");
@@ -925,7 +925,7 @@ mod live {
         let raw = std::fs::read_to_string("../worker/.dev.vars").expect("worker/.dev.vars");
         let token = raw.trim().trim_start_matches("RSQ_TOKEN=").trim();
         let cfg = Config::parse(&format!(
-            r#"{{"endpoint":"https://rsq.lumono.site","token":"{token}","socks_port":11083,"http_port":18083,"prefer_h3":true}}"#
+            r#"{{"endpoint":"https://vpn.example.com","token":"{token}","socks_port":11083,"http_port":18083,"prefer_h3":true}}"#
         ))
         .unwrap();
         let stats = Arc::new(Stats::default());
@@ -994,7 +994,7 @@ $rn = $ssl.Read($rb,0,$rb.Length)
         let raw = std::fs::read_to_string("../worker/.dev.vars").expect("worker/.dev.vars");
         let token = raw.trim().trim_start_matches("RSQ_TOKEN=").trim();
         let cfg = Config::parse(&format!(
-            r#"{{"endpoint":"https://rsq.lumono.site","token":"{token}","socks_port":11082,"http_port":18082,"prefer_h3":true}}"#
+            r#"{{"endpoint":"https://vpn.example.com","token":"{token}","socks_port":11082,"http_port":18082,"prefer_h3":true}}"#
         ))
         .unwrap();
         let stats = Arc::new(Stats::default());
@@ -1042,7 +1042,7 @@ $rn = $ssl.Read($rb,0,$rb.Length)
         let raw = std::fs::read_to_string("../worker/.dev.vars").expect("worker/.dev.vars");
         let token = raw.trim().trim_start_matches("RSQ_TOKEN=").trim();
         let cfg = Config::parse(&format!(
-            r#"{{"endpoint":"https://rsq.lumono.site","token":"{token}","socks_port":11080,"http_port":18080,"prefer_h3":true}}"#
+            r#"{{"endpoint":"https://vpn.example.com","token":"{token}","socks_port":11080,"http_port":18080,"prefer_h3":true}}"#
         ))
         .unwrap();
         let stats = Arc::new(Stats::default());
@@ -1125,7 +1125,7 @@ $rn = $ssl.Read($rb,0,$rb.Length)
         let raw = std::fs::read_to_string("../worker/.dev.vars").expect("worker/.dev.vars");
         let token = raw.trim().trim_start_matches("RSQ_TOKEN=").trim();
         let cfg = Config::parse(&format!(
-            r#"{{"endpoint":"https://rsq.lumono.site","token":"{token}","socks_port":11084,"http_port":18084,"prefer_h3":true}}"#
+            r#"{{"endpoint":"https://vpn.example.com","token":"{token}","socks_port":11084,"http_port":18084,"prefer_h3":true}}"#
         ))
         .unwrap();
         for host in ["www.google.com", "www.cloudflare.com", "example.com", "www.taobao.com"] {

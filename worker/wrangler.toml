@@ -5,11 +5,11 @@ workers_dev = false
 account_id = "7f795232352119f59469c2be8b308bc5"
 
 [vars]
-LANDING_HOST = "66.94.122.53"
+LANDING_HOST = "203.0.113.10"
 LANDING_PORT = "8443"
 
 [[routes]]
-pattern = "rsq.lumono.site"
+pattern = "vpn.example.com"
 custom_domain = true
 
 # 令牌不要写在这里。部署前执行：

@@ -82,7 +82,7 @@ class VpsSetup {
   }) async {
     final ip = publicIpv4(host);
     if (ip == null) {
-      throw VpsSetupException('VPS 要填公网 IPv4，例如 66.94.122.53');
+      throw VpsSetupException('VPS 要填公网 IPv4，例如 203.0.113.10');
     }
     if (password.isEmpty) {
       throw VpsSetupException('先填写 root 密码');

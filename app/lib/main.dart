@@ -1674,7 +1674,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!mounted) return;
     _apiToken.text = prefs.getString('cf_api_token') ?? '';
     final savedDomain = prefs.getString('cf_domain') ?? '';
-    if (savedDomain.isNotEmpty && savedDomain != 'rsq.lumono.site') {
+    if (savedDomain.isNotEmpty && savedDomain != 'vpn.example.com') {
       _domain.text = savedDomain;
     }
     _vpsIp.text = prefs.getString('vps_ip') ?? '';
@@ -2427,7 +2427,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _vpsFields() {
     return Column(
       children: [
-        TicketField(label: 'VPS 公网 IP', hint: '例如 66.94.122.53', controller: _vpsIp),
+        TicketField(label: 'VPS 公网 IP', hint: '例如 203.0.113.10', controller: _vpsIp),
         const SizedBox(height: 16),
         TicketField(
           label: 'VPS root 密码',

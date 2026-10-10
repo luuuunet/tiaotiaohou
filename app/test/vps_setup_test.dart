@@ -3,7 +3,7 @@ import 'package:rsq/vps_setup.dart';
 
 void main() {
   test('accepts public ipv4', () {
-    expect(publicIpv4('66.94.122.53'), '66.94.122.53');
+    expect(publicIpv4('203.0.113.10'), '203.0.113.10');
     expect(publicIpv4(' https://8.8.8.8:22 '), '8.8.8.8');
   });
 

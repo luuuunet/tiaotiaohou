@@ -133,7 +133,7 @@ class NodeBook {
     if (nodes.isEmpty) {
       final endpoint = store.getString('endpoint')?.trim() ?? '';
       final token = store.getString('token')?.trim() ?? '';
-      if (endpoint.startsWith('https://') && token.isNotEmpty && endpoint != 'https://rsq.lumono.site') {
+      if (endpoint.startsWith('https://') && token.isNotEmpty && endpoint != 'https://vpn.example.com') {
         final via = store.getString('exit_via') ?? 'landing';
         nodes.add(
           VpnNode(
@@ -975,7 +975,7 @@ class _NodeEditorState extends State<_NodeEditor> {
             ],
           ),
           const SizedBox(height: 12),
-          TicketField(label: '落地 IP（游戏 UDP，可空）', hint: '例如 66.94.122.53', controller: _vps),
+          TicketField(label: '落地 IP（游戏 UDP，可空）', hint: '例如 203.0.113.10', controller: _vps),
         ],
       ),
       actions: [
