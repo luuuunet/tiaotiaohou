@@ -1,8 +1,12 @@
 #!/bin/sh
 set -eu
-cd "$(dirname "$0")/../core"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT/core"
 cargo build --release
-cd "$(dirname "$0")/../app"
+DYLIB="$ROOT/core/target/release/librsq_core.dylib"
+install_name_tool -id "@executable_path/librsq_core.dylib" "$DYLIB"
+cd "$ROOT/app"
+flutter config --enable-macos-desktop
 flutter pub get
-flutter build macos
+flutter build macos --release
 echo "built app/build/macos/Build/Products/Release/rsq.app"

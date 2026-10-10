@@ -4,7 +4,10 @@
 
 Cloudflare 给用户一份免费额度，可以直接用。Worker 这条路大约每天 10 万次请求，首页能看到今天用了多少。没有自己的服务器也能用；有服务器时可以再自动搭一条落地。
 
-⬇️ Windows 安装包：<https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou-Setup.exe>
+⬇️ Windows：<https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou-Setup.exe>
+
+⬇️ macOS：<https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou-macos.zip>  
+解压后打开「跳跳猴」。第一次若系统拦下，到「系统设置 → 隐私与安全性」里点仍要打开。
 
 装好后按这四步：
 

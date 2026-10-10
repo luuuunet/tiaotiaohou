@@ -3,14 +3,16 @@ import 'dart:io';
 
 import 'package:ffi/ffi.dart';
 
-/// Windows 开机自启（当前用户 Run 项）。
+/// 开机自启。Windows 写当前用户 Run 项，macOS 写当前用户的登录项。
 class Autostart {
   static const _valueName = 'TiaoTiaoHou';
   static const _subKey = r'Software\Microsoft\Windows\CurrentVersion\Run';
+  static const _macLabel = 'dev.rsq.tiaotiaohou';
 
-  static bool get supported => Platform.isWindows;
+  static bool get supported => Platform.isWindows || Platform.isMacOS;
 
   static Future<bool> isEnabled() async {
+    if (Platform.isMacOS) return _macEnabled();
     if (!supported) return false;
     final current = _read();
     if (current == null || current.isEmpty) return false;
@@ -23,6 +25,7 @@ class Autostart {
   }
 
   static Future<String?> setEnabled(bool enabled) async {
+    if (Platform.isMacOS) return _macSet(enabled);
     if (!supported) return '这个系统暂不支持开机自启';
     if (enabled) {
       final path = Platform.resolvedExecutable.replaceAll('/', '\\');
@@ -34,6 +37,49 @@ class Autostart {
     // 2 = ERROR_FILE_NOT_FOUND，本来就没有也算成功
     if (deleted != 0 && deleted != 2) return '关掉开机自启失败';
     return null;
+  }
+
+  static File get _macPlist {
+    final home = Platform.environment['HOME'] ?? '';
+    return File('$home/Library/LaunchAgents/$_macLabel.plist');
+  }
+
+  static bool _macEnabled() {
+    if (!_macPlist.existsSync()) return false;
+    final text = _macPlist.readAsStringSync();
+    return text.contains(Platform.resolvedExecutable) && text.contains('--quiet');
+  }
+
+  static Future<String?> _macSet(bool enabled) async {
+    try {
+      if (!enabled) {
+        if (_macPlist.existsSync()) _macPlist.deleteSync();
+        return null;
+      }
+      final exe = Platform.resolvedExecutable;
+      final plist = '''
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$_macLabel</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$exe</string>
+    <string>--quiet</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+</dict>
+</plist>
+''';
+      _macPlist.parent.createSync(recursive: true);
+      _macPlist.writeAsStringSync(plist);
+      return null;
+    } catch (_) {
+      return '开机自启没有写进去';
+    }
   }
 
   static String? _read() {

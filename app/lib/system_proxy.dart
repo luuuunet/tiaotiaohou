@@ -6,13 +6,13 @@ import 'package:ffi/ffi.dart';
 class SystemProxy {
   static Future<String?> enable(int port, {List<String> bypass = const []}) async {
     if (Platform.isWindows) return _windows(true, port, bypass);
-    if (Platform.isMacOS) return _mac(true, port);
+    if (Platform.isMacOS) return _mac(true, port, bypass);
     return '这个系统要用应用自己的代理设置，地址是 127.0.0.1:$port';
   }
 
   static Future<String?> disable(int port) async {
     if (Platform.isWindows) return _windows(false, port, const []);
-    if (Platform.isMacOS) return _mac(false, port);
+    if (Platform.isMacOS) return _mac(false, port, const []);
     return null;
   }
 
@@ -27,7 +27,7 @@ class SystemProxy {
       return;
     }
     if (Platform.isMacOS) {
-      await disable(0);
+      await _macClearLocal();
     }
   }
 
@@ -42,7 +42,7 @@ class SystemProxy {
       return;
     }
     if (Platform.isMacOS) {
-      await disable(port);
+      await _macClearPort(port);
     }
   }
 
@@ -186,27 +186,85 @@ class SystemProxy {
     setOption(0, 37, nullptr, 0);
   }
 
-  static Future<String?> _mac(bool enable, int port) async {
+  static Future<List<String>> _macServices() async {
     final listed = await Process.run('networksetup', ['-listallnetworkservices']);
-    if (listed.exitCode != 0) return '读不到网络服务';
-    final services = (listed.stdout as String)
+    if (listed.exitCode != 0) return const [];
+    return (listed.stdout as String)
         .split('\n')
         .map((line) => line.trim())
         .where((line) => line.isNotEmpty && !line.startsWith('*') && !line.contains('asterisk'))
         .toList();
-    if (services.isEmpty) return '没有可设置的网络服务';
-    for (final service in services) {
-      if (enable) {
-        final web = await Process.run('networksetup', ['-setwebproxy', service, '127.0.0.1', '$port']);
-        final secure = await Process.run('networksetup', ['-setsecurewebproxy', service, '127.0.0.1', '$port']);
-        if (web.exitCode != 0 || secure.exitCode != 0) {
-          return '设置系统代理需要管理员权限';
-        }
-      } else {
-        await Process.run('networksetup', ['-setwebproxystate', service, 'off']);
-        await Process.run('networksetup', ['-setsecurewebproxystate', service, 'off']);
+  }
+
+  static Future<({bool enabled, String server, String port})?> _macWebProxy(String service) async {
+    final result = await Process.run('networksetup', ['-getwebproxy', service]);
+    if (result.exitCode != 0) return null;
+    var enabled = false;
+    var server = '';
+    var port = '';
+    for (final raw in (result.stdout as String).split('\n')) {
+      final line = raw.trim();
+      if (line.startsWith('Enabled:')) enabled = line.toLowerCase().contains('yes');
+      if (line.startsWith('Server:')) server = line.substring('Server:'.length).trim();
+      if (line.startsWith('Port:')) port = line.substring('Port:'.length).trim();
+    }
+    return (enabled: enabled, server: server, port: port);
+  }
+
+  static bool _isLocalProxy(String server) {
+    final host = server.toLowerCase();
+    return host == '127.0.0.1' || host == 'localhost';
+  }
+
+  static Future<void> _macClearLocal() async {
+    for (final service in await _macServices()) {
+      final proxy = await _macWebProxy(service);
+      if (proxy != null && proxy.enabled && _isLocalProxy(proxy.server)) {
+        await _macOff(service);
       }
     }
+  }
+
+  static Future<void> _macClearPort(int port) async {
+    for (final service in await _macServices()) {
+      final proxy = await _macWebProxy(service);
+      if (proxy != null && proxy.enabled && _isLocalProxy(proxy.server) && (port == 0 || proxy.port == '$port')) {
+        await _macOff(service);
+      }
+    }
+  }
+
+  static Future<void> _macOff(String service) async {
+    await Process.run('networksetup', ['-setwebproxystate', service, 'off']);
+    await Process.run('networksetup', ['-setsecurewebproxystate', service, 'off']);
+  }
+
+  static Future<String?> _mac(bool enable, int port, List<String> bypass) async {
+    final services = await _macServices();
+    if (services.isEmpty) return '没有可设置的网络服务';
+    if (!enable) {
+      for (final service in services) {
+        await _macOff(service);
+      }
+      return null;
+    }
+    final domains = <String>['localhost', '127.0.0.1', '*.local'];
+    for (final host in bypass) {
+      if (host.isEmpty) continue;
+      domains.add(host);
+      if (!host.startsWith('*.') && host.contains('.') && !_looksIpv4(host)) {
+        domains.add('*.$host');
+      }
+    }
+    var ok = 0;
+    for (final service in services) {
+      final web = await Process.run('networksetup', ['-setwebproxy', service, '127.0.0.1', '$port']);
+      final secure = await Process.run('networksetup', ['-setsecurewebproxy', service, '127.0.0.1', '$port']);
+      if (web.exitCode != 0 || secure.exitCode != 0) continue;
+      await Process.run('networksetup', ['-setproxybypassdomains', service, ...domains]);
+      ok++;
+    }
+    if (ok == 0) return '设置系统代理失败';
     return null;
   }
 }

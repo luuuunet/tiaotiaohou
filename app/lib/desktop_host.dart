@@ -32,8 +32,18 @@ class DesktopHost {
   }
 
   static Future<void> notify({required String title, required String body}) async {
+    if (Platform.isMacOS) {
+      final script = 'display notification ${jsonString(body)} with title ${jsonString(title)}';
+      await Process.run('osascript', ['-e', script]);
+      return;
+    }
     if (!supported) return;
     await channel.invokeMethod<void>('notify', {'title': title, 'body': body});
+  }
+
+  static String jsonString(String text) {
+    final escaped = text.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+    return '"$escaped"';
   }
 
   static void listen({

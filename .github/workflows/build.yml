@@ -66,12 +66,50 @@ jobs:
           if-no-files-found: error
       - name: Publish installer
         if: github.event_name != 'pull_request'
-        uses: ncipollo/release-action@v1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          gh release view windows --repo ${{ github.repository }} 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create windows --repo ${{ github.repository }} --title "跳跳猴" --notes "Windows 双击 tiaotiaohou-Setup.exe。macOS 解压 tiaotiaohou-macos.zip 后打开。"
+          }
+          gh release upload windows dist/tiaotiaohou-Setup.exe --repo ${{ github.repository }} --clobber
+
+  macos:
+    name: macOS 应用
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
         with:
-          tag: windows
-          name: 跳跳猴 Windows 安装包
-          allowUpdates: true
-          replacesArtifacts: true
-          artifacts: dist/tiaotiaohou-Setup.exe
-          body: 下载 tiaotiaohou-Setup.exe，双击即可安装。
-          token: ${{ secrets.GITHUB_TOKEN }}
+          workspaces: core
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+      - name: Build core and app
+        run: sh tool/build-macos.sh
+      - name: Zip app
+        run: |
+          mkdir -p dist
+          cd app/build/macos/Build/Products/Release
+          rm -rf "跳跳猴.app"
+          cp -R rsq.app "跳跳猴.app"
+          ditto -c -k --keepParent "跳跳猴.app" "$GITHUB_WORKSPACE/dist/tiaotiaohou-macos.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tiaotiaohou-macos
+          path: dist/tiaotiaohou-macos.zip
+          if-no-files-found: error
+      - name: Publish app
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view windows --repo ${{ github.repository }} || gh release create windows --repo ${{ github.repository }} --title "跳跳猴" --notes "Windows 双击 tiaotiaohou-Setup.exe。macOS 解压 tiaotiaohou-macos.zip 后打开。"
+          gh release upload windows dist/tiaotiaohou-macos.zip --repo ${{ github.repository }} --clobber
