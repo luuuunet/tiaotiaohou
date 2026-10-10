@@ -1,6 +1,8 @@
 # 🐵 跳跳猴
 
-点一下就接入。网页、YouTube 和游戏走自己的通讯协议，外面默认套 HTTP/3。没有服务器也能用 Cloudflare；有服务器可以自动搭好。
+跳跳猴是使用 **Cloudflare Worker** 的 VPN。点一下就接入，网页、YouTube 和游戏走自己的通讯协议，外面默认套 HTTP/3。
+
+Cloudflare 给用户一份免费额度，可以直接用。Worker 这条路大约每天 10 万次请求，首页能看到今天用了多少。没有自己的服务器也能用；有服务器时可以再自动搭一条落地。
 
 ⬇️ Windows 安装包：<https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou-Setup.exe>
 
@@ -15,7 +17,7 @@
 
 ![连接页](docs/home.png)
 
-这是平时用的页面。
+这是平时用的页面。当前节点如果走 Cloudflare Worker，流量就用上面的免费额度。
 
 - 上面选节点。点哪一条，下面就换成哪一条。
 - 绿色标记表示这条能开什么：网页、橙云网站、游戏 UDP。
