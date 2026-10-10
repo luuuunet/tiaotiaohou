@@ -959,7 +959,9 @@ class _HomePageState extends State<HomePage> {
                 Text(tx('还没有节点，请先在设置里添加', 'No node yet. Add one in settings.'), style: const TextStyle(color: kMute, fontSize: 15, height: 1.4)),
                 const SizedBox(height: 2),
                 Text(tx('特别感谢 Cloudflare 的支持', 'Thanks to Cloudflare'), style: const TextStyle(color: kMute, fontSize: 15, height: 1.4)),
-              ] else if (_running && _udpReady)
+              ] else if (Platform.isAndroid && (_running || host.isNotEmpty))
+                Text(tx('手机里填 127.0.0.1:$_socks', 'On this phone use 127.0.0.1:$_socks'), style: const TextStyle(color: kMute, fontSize: 15, height: 1.4))
+              else if (_running && _udpReady)
                 Text('${tx('游戏用', 'Games')} 127.0.0.1:$_socks', style: const TextStyle(color: kMute, fontSize: 15, height: 1.4)),
               const SizedBox(height: 12),
               Expanded(

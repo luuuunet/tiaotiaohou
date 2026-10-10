@@ -3,7 +3,10 @@ package dev.rsq.rsq
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
@@ -23,6 +26,7 @@ class MainActivity : FlutterActivity() {
                         ) {
                             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
                         }
+                        keepAwake()
                         ContextCompat.startForegroundService(this, Intent(this, RsqService::class.java))
                         result.success(null)
                     }
@@ -33,5 +37,17 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    private fun keepAwake() {
+        if (Build.VERSION.SDK_INT < 23) return
+        val power = getSystemService(PowerManager::class.java)
+        if (power.isIgnoringBatteryOptimizations(packageName)) return
+        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+            .setData(Uri.parse("package:$packageName"))
+        try {
+            startActivity(intent)
+        } catch (_: Exception) {
+        }
     }
 }

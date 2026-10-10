@@ -113,3 +113,64 @@ jobs:
         run: |
           gh release view windows --repo ${{ github.repository }} || gh release create windows --repo ${{ github.repository }} --title "跳跳猴" --notes "Windows 双击 tiaotiaohou-Setup.exe。macOS 解压 tiaotiaohou-macos.zip 后打开。"
           gh release upload windows dist/tiaotiaohou-macos.zip --repo ${{ github.repository }} --clobber
+
+  android:
+    name: Android 安装包
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - name: Install NDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "ndk;27.2.12479018"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+      - name: Build native core
+        run: |
+          cargo install cargo-ndk
+          cargo ndk -t arm64-v8a -t armeabi-v7a -o app/android/app/src/main/jniLibs build --release --manifest-path core/Cargo.toml
+      - name: Build apk
+        working-directory: app
+        run: |
+          flutter config --enable-android
+          flutter pub get
+          flutter build apk --release
+      - name: Collect apk
+        run: |
+          mkdir -p dist
+          apk=$(find . -path '*flutter-apk/app-release.apk' | head -n 1)
+          if [ -z "$apk" ]; then
+            echo "没有找到 apk"
+            exit 1
+          fi
+          cp "$apk" dist/tiaotiaohou.apk
+          ls -lh dist/tiaotiaohou.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tiaotiaohou-android
+          path: dist/tiaotiaohou.apk
+          if-no-files-found: error
+      - name: Publish apk
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view windows --repo ${{ github.repository }} || gh release create windows --repo ${{ github.repository }} --title "跳跳猴" --notes "Windows 双击 tiaotiaohou-Setup.exe。macOS 解压 tiaotiaohou-macos.zip。Android 安装 tiaotiaohou.apk，在应用里填 127.0.0.1:1080。"
+          gh release upload windows dist/tiaotiaohou.apk --repo ${{ github.repository }} --clobber

@@ -9,6 +9,9 @@ Cloudflare 给用户一份免费额度，可以直接用。Worker 这条路大�
 ⬇️ macOS：<https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou-macos.zip>  
 解压后打开「跳跳猴」。第一次若系统拦下，到「系统设置 → 隐私与安全性」里点仍要打开。
 
+⬇️ Android：<https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou.apk>  
+安装后，在浏览器或支持代理的应用里填 `127.0.0.1:1080`。安卓不会改系统全局代理。连上后允许通知，并同意在后台继续运行，锁屏才不容易被系统关掉。
+
 装好后按这四步：
 
 1. 左侧 **搭建**，或在 **节点** 里导入一条已经有的配置。
