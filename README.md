@@ -4,13 +4,11 @@
 
 Cloudflare 给用户一份免费额度，可以直接用。Worker 这条路大约每天 10 万次请求，首页能看到今天用了多少。没有自己的服务器也能用；有服务器时可以再自动搭一条落地。
 
-⬇️ Windows：<https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou-Setup.exe>
-
-⬇️ macOS：<https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou-macos.zip>  
-解压后打开「跳跳猴」。第一次若系统拦下，到「系统设置 → 隐私与安全性」里点仍要打开。
-
-⬇️ Android：<https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou.apk>  
-安装后，在浏览器或支持代理的应用里填 `127.0.0.1:1080`。安卓不会改系统全局代理。连上后允许通知，并同意在后台继续运行，锁屏才不容易被系统关掉。
+| 系统 | 下载 | 怎么用 |
+| --- | --- | --- |
+| Windows | [tiaotiaohou-Setup.exe](https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou-Setup.exe) | 双击安装 |
+| macOS | [tiaotiaohou-macos.zip](https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou-macos.zip) | 解压后打开。若被拦住，到「系统设置 → 隐私与安全性」点仍要打开 |
+| Android | [tiaotiaohou.apk](https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou.apk) | 安装后在应用里填 `127.0.0.1:1080`。连上后允许通知，并同意在后台继续运行 |
 
 装好后按这四步：
 
