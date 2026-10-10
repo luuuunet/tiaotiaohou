@@ -1807,6 +1807,75 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _deployDirect() async {
+    final socks = int.tryParse(_socks.text.trim());
+    final http = int.tryParse(_http.text.trim());
+    if (socks == null || http == null || socks == http) {
+      _show('两个本地端口要有效，而且不能相同');
+      return;
+    }
+    final ip = publicIpv4(_vpsIp.text);
+    if (ip == null) {
+      _show('VPS 要填公网 IPv4');
+      return;
+    }
+    if (_vpsPassword.text.isEmpty) {
+      _show('先填写 VPS 的 root 密码');
+      return;
+    }
+    final host = directHostname(_domain.text);
+    if (host == null) {
+      _show('域名要像 vpn.example.com');
+      return;
+    }
+    setState(() {
+      _deploying = true;
+      _deployLog
+        ..clear()
+        ..add('开始：域名 + 服务器（不经过 Cloudflare）');
+      _deployStatus = _deployLog.last;
+    });
+    try {
+      final access = await VpsSetup().install(
+        host: ip,
+        password: _vpsPassword.text,
+        token: newAccessToken(),
+        requiredPort: 443,
+        certMode: 'acme-http',
+        domain: host,
+        tlsPort: 443,
+        originPort: 0,
+        onStep: _log,
+      );
+      final endpoint = 'https://$host';
+      final name = _nodeName.text.trim().isEmpty ? host : _nodeName.text.trim();
+      await _putNode(
+        name: name,
+        endpoint: endpoint,
+        token: access,
+        exitVia: 'vps',
+        vpsIp: ip,
+        socks: socks,
+        http: http,
+      );
+      _endpoint.text = endpoint;
+      _token.text = access;
+      _exitVia = 'vps';
+      if (_nodeName.text.trim().isEmpty) _nodeName.text = name;
+      _log('完成：域名直接连到服务器，证书已申请');
+      if (!mounted) return;
+      await _finishSaved('已接好：域名 + 服务器');
+    } on VpsSetupException catch (err) {
+      _log('失败：$err');
+      _show(err.message);
+    } catch (_) {
+      _log('失败：未知错误');
+      _show('部署失败');
+    } finally {
+      if (mounted) setState(() => _deploying = false);
+    }
+  }
+
   Future<void> _deployCdn() async {
     final socks = int.tryParse(_socks.text.trim());
     final http = int.tryParse(_http.text.trim());
@@ -2198,6 +2267,7 @@ class _SettingsPageState extends State<SettingsPage> {
             InkChip(label: '只用 Cloudflare', selected: _setupTab == 1, onTap: _deploying ? null : () => setState(() => _setupTab = 1)),
             InkChip(label: 'Worker + 服务器', selected: _setupTab == 2, onTap: _deploying ? null : () => setState(() => _setupTab = 2)),
             InkChip(label: '橙云 + 服务器', selected: _setupTab == 3, onTap: _deploying ? null : () => setState(() => _setupTab = 3)),
+            InkChip(label: '域名 + 服务器', selected: _setupTab == 4, onTap: _deploying ? null : () => setState(() => _setupTab = 4)),
           ],
         ),
         const SizedBox(height: 18),
@@ -2205,6 +2275,7 @@ class _SettingsPageState extends State<SettingsPage> {
         if (_setupTab == 1) _cfOnlyForm(),
         if (_setupTab == 2) _cfVpsForm(),
         if (_setupTab == 3) _cdnForm(),
+        if (_setupTab == 4) _directForm(),
         if (_setupTab != 0) ...[
           const SizedBox(height: 16),
           _logBox(),
@@ -2268,6 +2339,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 udp: true,
                 action: '去搭建',
                 onTap: () => setState(() => _setupTab = 2),
+              ),
+              _guidePick(
+                title: '域名 + 服务器',
+                body: '不经过 Cloudflare。先把域名指到服务器，证书自动申请。网页和游戏都从这台机器出去。',
+                via: 'vps',
+                udp: true,
+                action: '去搭建',
+                onTap: () => setState(() => _setupTab = 4),
               ),
               _guidePick(
                 title: '只用 Cloudflare',
@@ -2472,6 +2551,27 @@ class _SettingsPageState extends State<SettingsPage> {
           onPressed: _deploying ? null : _deployCdn,
           icon: const AppIcon('cloud.svg', color: Colors.white, size: 18),
           label: Text(_deploying ? '正在搭建' : '搭建橙云 + 服务器'),
+        ),
+      ],
+    );
+  }
+
+  Widget _directForm() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('不经过 Cloudflare。先把域名的 A 记录指到这台服务器，并放行 80 和 443。证书会自动申请。', style: TextStyle(color: kMute, height: 1.45)),
+        const SizedBox(height: 16),
+        TicketField(label: '节点名称', hint: '例如 家里、公司、备用线路，可随便填', controller: _nodeName),
+        const SizedBox(height: 16),
+        TicketField(label: '你的域名', hint: 'vpn.example.com', controller: _domain),
+        const SizedBox(height: 16),
+        _vpsFields(),
+        const SizedBox(height: 16),
+        FilledButton.icon(
+          onPressed: _deploying ? null : _deployDirect,
+          icon: const AppIcon('server.svg', color: Colors.white, size: 18),
+          label: Text(_deploying ? '正在搭建' : '搭建域名 + 服务器'),
         ),
       ],
     );

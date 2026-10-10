@@ -452,10 +452,11 @@ async def main() -> None:
                 f"tiaotiaohou landing tls 0.0.0.0:{TLS_PORT}",
                 lambda: asyncio.start_server(handle, "0.0.0.0", TLS_PORT, ssl=tls_context()),
             )
-        origin = await _listen(
-            f"tiaotiaohou origin https 0.0.0.0:{ORIGIN_PORT}",
-            lambda: asyncio.start_server(handle_origin, "0.0.0.0", ORIGIN_PORT, ssl=tls_context(http=True)),
-        )
+        if ORIGIN_PORT > 0 and ORIGIN_PORT != TLS_PORT:
+            origin = await _listen(
+                f"tiaotiaohou origin https 0.0.0.0:{ORIGIN_PORT}",
+                lambda: asyncio.start_server(handle_origin, "0.0.0.0", ORIGIN_PORT, ssl=tls_context(http=True)),
+            )
     else:
         print("tiaotiaohou origin skipped (no cert)", flush=True)
     udp_transport = None

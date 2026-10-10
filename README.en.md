@@ -57,6 +57,7 @@ If you have a server, use the recommended **Orange cloud + server**. Fill in the
 | --- | --- | --- |
 | 🟠 **Orange cloud + server** | The domain goes through Cloudflare and back to your server. No Worker. Web prefers HTTP/3, and game UDP works. | You already have a server. |
 | 🧩 **Worker + server** | Web hits the Worker first, then leaves from your server. | When the orange-cloud origin is unstable. |
+| 🏠 **Domain + server** | No Cloudflare. The domain's A record points straight at the server, and the certificate is requested automatically. Web and games leave from that machine. | You can point the domain at your server. |
 | ☁️ **Cloudflare only** | Domain only, no server of your own. Ordinary sites open. Game UDP does not. | You do not have a server yet. |
 
 One machine can run two setups. Use two different domains. If some sites will not open, turn on **Open blocked sites** under Device.

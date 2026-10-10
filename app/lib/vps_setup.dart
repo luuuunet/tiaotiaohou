@@ -83,6 +83,8 @@ class VpsSetup {
     String cloudflareToken = '',
     String certificate = '',
     String privateKey = '',
+    int? tlsPort,
+    int? originPort,
     void Function(String step)? onStep,
   }) async {
     final ip = publicIpv4(host);
@@ -95,10 +97,12 @@ class VpsSetup {
     if (token.isEmpty || token.length > 256) {
       throw VpsSetupException('连接令牌不合法');
     }
-    final mode = certMode == 'acme' || certMode == 'own' ? certMode : 'self';
-    if (mode == 'acme') {
+    final mode = certMode == 'acme' || certMode == 'own' || certMode == 'acme-http' ? certMode : 'self';
+    if (mode == 'acme' || mode == 'acme-http') {
       if (domain.isEmpty) throw VpsSetupException('自动申请证书要先填域名');
-      if (cloudflareToken.trim().isEmpty) throw VpsSetupException('自动申请证书要用 Cloudflare API 令牌');
+    }
+    if (mode == 'acme' && cloudflareToken.trim().isEmpty) {
+      throw VpsSetupException('自动申请证书要用 Cloudflare API 令牌');
     }
     if (mode == 'own') {
       final problem = ownCertificateProblem(certificate, privateKey);
@@ -137,11 +141,15 @@ class VpsSetup {
       }
 
       onStep?.call(mode == 'acme' ? '正在申请证书并启动' : '正在服务器上安装并启动');
+      final command = StringBuffer('TTM_NEED_PORT=$requiredPort TTM_CERT_MODE=$mode TTM_DOMAIN=${_shellQuote(domain)} TTM_EXPECT_IP=$ip');
+      if (tlsPort != null) command.write(' TTM_TLS_PORT=$tlsPort');
+      if (originPort != null) command.write(' TTM_ORIGIN_PORT=$originPort');
+      command.write(' bash /tmp/ttm-install.sh');
       await _exec(
         client,
-        'TTM_NEED_PORT=$requiredPort TTM_CERT_MODE=$mode TTM_DOMAIN=${_shellQuote(domain)} bash /tmp/ttm-install.sh',
+        command.toString(),
         onStep: onStep,
-        timeout: mode == 'acme' ? const Duration(minutes: 12) : const Duration(minutes: 8),
+        timeout: mode == 'acme' || mode == 'acme-http' ? const Duration(minutes: 12) : const Duration(minutes: 8),
       );
       final used = await _read(client, '/etc/tiaotiaohou/token');
       if (used.isEmpty) {
@@ -257,6 +265,20 @@ String _shellQuote(String value) {
 }
 
 /// 自有证书要是 PEM。返回 null 表示可以上传。
+/// 直连搭建用的域名，必须是用户自己填的主机名，不会自动加前缀。
+String? directHostname(String input) {
+  var host = input.trim().toLowerCase();
+  if (host.startsWith('https://')) host = host.substring(8);
+  if (host.startsWith('http://')) host = host.substring(7);
+  host = host.split('/').first;
+  if (host.isEmpty || host.contains(':')) return null;
+  final labels = host.split('.');
+  if (labels.length < 2 || labels.any((label) => label.isEmpty)) return null;
+  if (!RegExp(r'^[a-z0-9.-]+$').hasMatch(host)) return null;
+  if (RegExp(r'^\d{1,3}(\.\d{1,3}){3}$').hasMatch(host)) return null;
+  return host;
+}
+
 String? ownCertificateProblem(String certificate, String privateKey) {
   final cert = certificate.trim();
   final key = privateKey.trim();
@@ -311,7 +333,51 @@ else
 fi
 mode="${TTM_CERT_MODE:-self}"
 domain="${TTM_DOMAIN:-}"
-if [ "$mode" = "own" ]; then
+expect_ip="${TTM_EXPECT_IP:-}"
+if [ "$mode" = "acme-http" ]; then
+  echo "正在检查域名是否指向这台服务器"
+  if [ -z "$domain" ]; then
+    echo "acme needs domain" >&2
+    exit 1
+  fi
+  resolved="$(python3 -c 'import os,socket; print(socket.gethostbyname(os.environ["TTM_DOMAIN"]))' 2>/dev/null || true)"
+  if [ -z "$resolved" ] || [ "$resolved" != "$expect_ip" ]; then
+    echo "域名 $domain 还没指向 $expect_ip" >&2
+    exit 1
+  fi
+  echo "正在安装 ACME 工具"
+  if ! command -v certbot >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1; then
+      apt-get -o Acquire::ForceIPv4=true update -y || apt-get update -y || true
+      apt-get install -y certbot
+    elif command -v dnf >/dev/null 2>&1; then
+      dnf install -y certbot
+    elif command -v yum >/dev/null 2>&1; then
+      yum install -y certbot
+    else
+      echo "certbot not available" >&2
+      exit 1
+    fi
+  fi
+  if command -v ufw >/dev/null 2>&1; then
+    ufw allow 80/tcp || true
+  fi
+  echo "正在为 $domain 申请证书"
+  certbot certonly --standalone \
+    -d "$domain" \
+    --agree-tos --register-unsafely-without-email \
+    --non-interactive --keep-until-expiring
+  install -m 0644 "/etc/letsencrypt/live/$domain/fullchain.pem" /etc/tiaotiaohou/cert.pem
+  install -m 0600 "/etc/letsencrypt/live/$domain/privkey.pem" /etc/tiaotiaohou/key.pem
+  mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+  cat > /etc/letsencrypt/renewal-hooks/deploy/tiaotiaohou.sh <<EOF
+#!/bin/sh
+install -m 0644 "/etc/letsencrypt/live/$domain/fullchain.pem" /etc/tiaotiaohou/cert.pem
+install -m 0600 "/etc/letsencrypt/live/$domain/privkey.pem" /etc/tiaotiaohou/key.pem
+systemctl restart tiaotiaohou-landing.service
+EOF
+  chmod 755 /etc/letsencrypt/renewal-hooks/deploy/tiaotiaohou.sh
+elif [ "$mode" = "own" ]; then
   echo "写入自有证书"
   if [ ! -s /tmp/ttm-cert.pem ] || [ ! -s /tmp/ttm-key.pem ]; then
     echo "own cert missing" >&2
@@ -388,11 +454,22 @@ NoNewPrivileges=true
 [Install]
 WantedBy=multi-user.target
 EOF
+tls_port="${TTM_TLS_PORT:-8443}"
+origin_port="${TTM_ORIGIN_PORT:-443}"
+python3 - <<PY
+from pathlib import Path
+path = Path("/etc/systemd/system/tiaotiaohou-landing.service")
+text = path.read_text(encoding="utf-8")
+text = text.replace("TTM_TLS_PORT=8443", "TTM_TLS_PORT=$tls_port")
+text = text.replace("TTM_ORIGIN_PORT=443", "TTM_ORIGIN_PORT=$origin_port")
+path.write_text(text, encoding="utf-8")
+PY
 if command -v ufw >/dev/null 2>&1; then
   ufw allow 8443/tcp || true
   ufw allow 8444/tcp || true
   ufw allow 8444/udp || true
   ufw allow 443/tcp || true
+  ufw allow 80/tcp || true
 fi
 if command -v firewall-cmd >/dev/null 2>&1; then
   firewall-cmd --permanent --add-port=8443/tcp || true

@@ -15,6 +15,13 @@ void main() {
     expect(publicIpv4(''), isNull);
   });
 
+  test('direct hostname stays as typed', () {
+    expect(directHostname('VPN.Example.com'), 'vpn.example.com');
+    expect(directHostname('https://vpn.example.com/path'), 'vpn.example.com');
+    expect(directHostname('example'), isNull);
+    expect(directHostname('203.0.113.10'), isNull);
+  });
+
   test('own certificate must be pem', () {
     expect(ownCertificateProblem('nope', 'nope'), contains('证书'));
     expect(
