@@ -2,12 +2,12 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 
-/// Windows 托盘 / 窗口宿主通道。
+/// 桌面窗口、托盘和通知。
 class DesktopHost {
   DesktopHost._();
 
   static const channel = MethodChannel('dev.rsq/host');
-  static bool get supported => Platform.isWindows || Platform.isMacOS;
+  static bool get supported => Platform.isWindows || Platform.isMacOS || Platform.isLinux;
 
   static Future<void> hideToTray() async {
     if (!supported) return;
@@ -20,9 +20,13 @@ class DesktopHost {
   }
 
   static Future<void> quit() async {
-    if (Platform.isWindows || Platform.isMacOS) {
-      await channel.invokeMethod<void>('quit');
-      return;
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      try {
+        await channel.invokeMethod<void>('quit');
+        return;
+      } catch (_) {
+        exit(0);
+      }
     }
     exit(0);
   }
@@ -38,8 +42,43 @@ class DesktopHost {
       await Process.run('osascript', ['-e', script]);
       return;
     }
+    if (Platform.isLinux) {
+      await _linuxNotify(title, body);
+      return;
+    }
     if (!supported) return;
     await channel.invokeMethod<void>('notify', {'title': title, 'body': body});
+  }
+
+  static Future<void> _linuxNotify(String title, String body) async {
+    try {
+      final result = await Process.run('gdbus', [
+        'call',
+        '--session',
+        '--dest',
+        'org.freedesktop.Notifications',
+        '--object-path',
+        '/org/freedesktop/Notifications',
+        '--method',
+        'org.freedesktop.Notifications.Notify',
+        _gvariant('跳跳猴'),
+        '0',
+        "''",
+        _gvariant(title),
+        _gvariant(body),
+        '[]',
+        '{}',
+        '5000',
+      ]);
+      if (result.exitCode == 0) return;
+    } catch (_) {}
+    try {
+      await Process.run('notify-send', ['--app-name=跳跳猴', title, body]);
+    } catch (_) {}
+  }
+
+  static String _gvariant(String text) {
+    return "'${text.replaceAll('\\', '\\\\').replaceAll("'", r"\'")}'";
   }
 
   static String jsonString(String text) {

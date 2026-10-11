@@ -299,6 +299,7 @@ class _HomePageState extends State<HomePage> {
       if (_systemProxy) {
         final proxyError = await SystemProxy.enable(_http, bypass: _bypass, socksPort: _socks);
         _appliedProxy = proxyError == null;
+        if (proxyError != null && mounted) _show(proxyError);
       }
     } catch (_) {}
   }

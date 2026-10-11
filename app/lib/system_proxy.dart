@@ -7,12 +7,14 @@ class SystemProxy {
   static Future<String?> enable(int port, {List<String> bypass = const [], int socksPort = 1080}) async {
     if (Platform.isWindows) return _windows(true, port, bypass);
     if (Platform.isMacOS) return _mac(true, port, bypass, socksPort);
+    if (Platform.isLinux) return _linux(true, port, bypass, socksPort);
     return '这个系统要用应用自己的代理设置，地址是 127.0.0.1:$port';
   }
 
   static Future<String?> disable(int port) async {
     if (Platform.isWindows) return _windows(false, port, const []);
     if (Platform.isMacOS) return _mac(false, port, const [], 0);
+    if (Platform.isLinux) return _linux(false, port, const [], 0);
     return null;
   }
 
@@ -28,7 +30,9 @@ class SystemProxy {
     }
     if (Platform.isMacOS) {
       await _macClearLocal();
+      return;
     }
+    if (Platform.isLinux) await _linuxClear(0);
   }
 
   /// 启动时清掉上次异常退出留下的本机代理，避免 Chrome 一直卡在死代理上。
@@ -43,7 +47,9 @@ class SystemProxy {
     }
     if (Platform.isMacOS) {
       await _macClearPort(port);
+      return;
     }
+    if (Platform.isLinux) await _linuxClear(port);
   }
 
   static Future<String?> _windows(bool enable, int port, List<String> bypass) async {
@@ -284,5 +290,300 @@ class SystemProxy {
     }
     if (ok == 0) return '设置系统代理失败';
     return null;
+  }
+
+  /// GNOME `ignore-hosts` 的 GVariant 文本。
+  static String gnomeIgnoreHosts(List<String> bypass) {
+    final parts = <String>['localhost', '127.0.0.1', '::1'];
+    final seen = <String>{...parts};
+    for (final host in bypass) {
+      if (host.isEmpty || host.contains(' ') || host.contains("'")) continue;
+      if (seen.add(host)) parts.add(host);
+      if (!host.startsWith('*.') && host.contains('.') && !_looksIpv4(host)) {
+        final wild = '*.$host';
+        if (seen.add(wild)) parts.add(wild);
+      }
+    }
+    return '[${parts.map((host) => "'${host.replaceAll('\\', '\\\\')}'").join(', ')}]';
+  }
+
+  static String gnomeUnquote(String raw) {
+    final text = raw.trim();
+    if (text.length >= 2 && ((text.startsWith("'") && text.endsWith("'")) || (text.startsWith('"') && text.endsWith('"')))) {
+      return text.substring(1, text.length - 1);
+    }
+    return text;
+  }
+
+  static String kdeNoProxy(List<String> bypass) {
+    final parts = <String>['localhost', '127.0.0.1', '::1'];
+    final seen = <String>{...parts};
+    for (final host in bypass) {
+      if (host.isEmpty || host.contains(',') || host.contains(' ')) continue;
+      if (seen.add(host)) parts.add(host);
+      if (!host.startsWith('*.') && host.contains('.') && !_looksIpv4(host)) {
+        final wild = '*.$host';
+        if (seen.add(wild)) parts.add(wild);
+      }
+    }
+    return parts.join(',');
+  }
+
+  static bool kdeProxyIsLocal(Map<String, String> keys) {
+    if ((keys['ProxyType'] ?? '') != '1') return false;
+    final blob = '${keys['httpProxy'] ?? ''} ${keys['httpsProxy'] ?? ''} ${keys['socksProxy'] ?? ''}'.toLowerCase();
+    return blob.contains('127.0.0.1') || blob.contains('localhost');
+  }
+
+  /// 只改 `[Proxy Settings]`。不是本机代理时原样返回。
+  static String rewriteKdeProxyFile(
+    String existing, {
+    required bool enable,
+    required int httpPort,
+    int socksPort = 1080,
+    String noProxy = 'localhost,127.0.0.1,::1',
+  }) {
+    final text = existing.replaceAll('\r\n', '\n');
+    final start = _iniHeader(text, 'Proxy Settings');
+    if (start < 0) {
+      if (!enable) return existing;
+      final block = _kdeBlock(httpPort: httpPort, socksPort: socksPort, noProxy: noProxy);
+      if (text.isEmpty) return block;
+      final gap = text.endsWith('\n') ? '\n' : '\n\n';
+      return '$text$gap$block';
+    }
+    final end = _iniNextHeader(text, start);
+    final body = text.substring(start, end);
+    if (!enable) {
+      if (!kdeProxyIsLocal(_iniKeys(body))) return existing;
+      final cleared = _setIniKey(body, 'ProxyType', '0');
+      return text.substring(0, start) + cleared + text.substring(end);
+    }
+    final block = _kdeBlock(httpPort: httpPort, socksPort: socksPort, noProxy: noProxy);
+    return text.substring(0, start) + block + text.substring(end);
+  }
+
+  static int _iniHeader(String text, String name) {
+    final header = '[$name]';
+    var offset = 0;
+    for (final line in text.split('\n')) {
+      if (line.trim() == header) return offset;
+      offset += line.length + 1;
+    }
+    return -1;
+  }
+
+  static int _iniNextHeader(String text, int from) {
+    final lines = text.substring(from).split('\n');
+    var offset = from;
+    var first = true;
+    for (final line in lines) {
+      if (!first && RegExp(r'^\s*\[.+\]\s*$').hasMatch(line)) return offset;
+      first = false;
+      offset += line.length + 1;
+      if (offset > text.length) return text.length;
+    }
+    return text.length;
+  }
+
+  static Map<String, String> _iniKeys(String body) {
+    final keys = <String, String>{};
+    for (final line in body.split('\n')) {
+      final eq = line.indexOf('=');
+      if (eq <= 0) continue;
+      keys[line.substring(0, eq).trim()] = line.substring(eq + 1).trim();
+    }
+    return keys;
+  }
+
+  static String _setIniKey(String body, String key, String value) {
+    final lines = body.split('\n');
+    var found = false;
+    for (var i = 0; i < lines.length; i++) {
+      final eq = lines[i].indexOf('=');
+      if (eq <= 0) continue;
+      if (lines[i].substring(0, eq).trim() == key) {
+        lines[i] = '$key=$value';
+        found = true;
+        break;
+      }
+    }
+    if (!found) lines.insert(lines.isEmpty ? 0 : 1, '$key=$value');
+    var text = lines.join('\n');
+    if (!text.endsWith('\n')) text = '$text\n';
+    return text;
+  }
+
+  static String _kdeBlock({required int httpPort, required int socksPort, required String noProxy}) {
+    final lines = <String>[
+      '[Proxy Settings]',
+      'ProxyType=1',
+      'httpProxy=http://127.0.0.1:$httpPort',
+      'httpsProxy=http://127.0.0.1:$httpPort',
+      'ftpProxy=http://127.0.0.1:$httpPort',
+      if (socksPort > 0) 'socksProxy=socks://127.0.0.1:$socksPort',
+      'NoProxyFor=$noProxy',
+      'ReversedException=false',
+    ];
+    return '${lines.join('\n')}\n';
+  }
+
+  static bool _desktopIsKde() {
+    final desktop = '${Platform.environment['XDG_CURRENT_DESKTOP'] ?? ''} ${Platform.environment['DESKTOP_SESSION'] ?? ''}'.toLowerCase();
+    return desktop.contains('kde') || desktop.contains('plasma');
+  }
+
+  static String? _kdeFilePath() {
+    final xdg = Platform.environment['XDG_CONFIG_HOME'] ?? '';
+    if (xdg.isNotEmpty) return '$xdg/kioslaverc';
+    final home = Platform.environment['HOME'] ?? '';
+    if (home.isEmpty) return null;
+    return '$home/.config/kioslaverc';
+  }
+
+  static Future<bool> _gnomeSchemaPresent() async {
+    try {
+      final result = await Process.run('gsettings', ['list-schemas']);
+      if (result.exitCode != 0) return false;
+      return '${result.stdout}'.split('\n').any((line) => line.trim() == 'org.gnome.system.proxy');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<String?> _gget(String schema, String key) async {
+    try {
+      final result = await Process.run('gsettings', ['get', schema, key]);
+      if (result.exitCode != 0) return null;
+      return gnomeUnquote('${result.stdout}');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<int> _gset(String schema, String key, String value) async {
+    try {
+      final result = await Process.run('gsettings', ['set', schema, key, value]);
+      return result.exitCode;
+    } catch (_) {
+      return 1;
+    }
+  }
+
+  static Future<bool> _gnomeIsOurs(int port) async {
+    final mode = await _gget('org.gnome.system.proxy', 'mode');
+    final host = await _gget('org.gnome.system.proxy.http', 'host');
+    final current = await _gget('org.gnome.system.proxy.http', 'port');
+    if (mode != 'manual' || !_isLocalProxy(host ?? '')) return false;
+    if (port != 0 && current != '$port') return false;
+    return true;
+  }
+
+  static Future<String?> _gnomeApply(bool enable, int port, List<String> bypass, int socksPort) async {
+    if (!enable) {
+      if (!await _gnomeIsOurs(0)) return null;
+      if (await _gset('org.gnome.system.proxy', 'mode', "'none'") != 0) return '系统代理没有关掉';
+      return null;
+    }
+    final sets = <List<String>>[
+      ['org.gnome.system.proxy', 'mode', "'manual'"],
+      ['org.gnome.system.proxy.http', 'host', "'127.0.0.1'"],
+      ['org.gnome.system.proxy.http', 'port', '$port'],
+      ['org.gnome.system.proxy.https', 'host', "'127.0.0.1'"],
+      ['org.gnome.system.proxy.https', 'port', '$port'],
+      if (socksPort > 0) ...[
+        ['org.gnome.system.proxy.socks', 'host', "'127.0.0.1'"],
+        ['org.gnome.system.proxy.socks', 'port', '$socksPort'],
+      ],
+      ['org.gnome.system.proxy', 'ignore-hosts', gnomeIgnoreHosts(bypass)],
+    ];
+    for (final item in sets) {
+      if (await _gset(item[0], item[1], item[2]) != 0) return '设置系统代理失败';
+    }
+    return null;
+  }
+
+  static Future<String?> _kdeApply(bool enable, int port, List<String> bypass, int socksPort) async {
+    final path = _kdeFilePath();
+    if (path == null) return enable ? '系统代理没有写进去' : null;
+    final file = File(path);
+    final existing = file.existsSync() ? file.readAsStringSync() : '';
+    final next = rewriteKdeProxyFile(existing, enable: enable, httpPort: port, socksPort: socksPort, noProxy: kdeNoProxy(bypass));
+    if (next == existing) return null;
+    try {
+      file.parent.createSync(recursive: true);
+      file.writeAsStringSync(next);
+    } catch (_) {
+      return enable ? '系统代理没有写进去' : '系统代理没有关掉';
+    }
+    try {
+      await Process.run('dbus-send', [
+        '--session',
+        '--type=signal',
+        '/KIO/Scheduler',
+        'org.kde.KIO.Scheduler.reparseSlaveConfiguration',
+        'string:',
+      ]);
+    } catch (_) {}
+    return null;
+  }
+
+  static Future<void> _linuxClear(int port) async {
+    if (await _gnomeSchemaPresent() && await _gnomeIsOurs(port)) {
+      await _gset('org.gnome.system.proxy', 'mode', "'none'");
+    }
+    final path = _kdeFilePath();
+    if (path == null) return;
+    final file = File(path);
+    if (!file.existsSync()) return;
+    final existing = file.readAsStringSync();
+    final start = _iniHeader(existing.replaceAll('\r\n', '\n'), 'Proxy Settings');
+    if (start < 0) return;
+    final text = existing.replaceAll('\r\n', '\n');
+    final body = text.substring(start, _iniNextHeader(text, start));
+    final keys = _iniKeys(body);
+    if (!kdeProxyIsLocal(keys)) return;
+    if (port != 0 && !(keys['httpProxy'] ?? '').endsWith(':$port')) return;
+    final next = rewriteKdeProxyFile(existing, enable: false, httpPort: port);
+    if (next == existing) return;
+    try {
+      file.writeAsStringSync(next);
+    } catch (_) {}
+  }
+
+  static Future<String?> _linux(bool enable, int port, List<String> bypass, int socksPort) async {
+    final gnome = await _gnomeSchemaPresent();
+    final kde = _desktopIsKde();
+    if (!gnome && !kde) {
+      if (!enable) return null;
+      return '这个桌面不能自动设置系统代理，浏览器请填 127.0.0.1:$port';
+    }
+    if (!enable) {
+      final gnomeError = gnome ? await _gnomeApply(false, port, bypass, socksPort) : null;
+      final kdeError = kde ? await _kdeApply(false, port, bypass, socksPort) : null;
+      return gnomeError ?? kdeError;
+    }
+    String? failure;
+    var ok = false;
+    if (gnome) {
+      final err = await _gnomeApply(true, port, bypass, socksPort);
+      if (err == null) {
+        ok = true;
+      } else {
+        failure = err;
+      }
+    }
+    if (kde) {
+      final err = await _kdeApply(true, port, bypass, socksPort);
+      if (err == null) {
+        ok = true;
+      } else if (_desktopIsKde()) {
+        return err;
+      } else {
+        failure ??= err;
+      }
+    }
+    if (ok) return null;
+    return failure ?? '设置系统代理失败';
   }
 }

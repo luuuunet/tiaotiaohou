@@ -11,6 +11,7 @@ Cloudflare gives each user a free quota you can use directly. The Worker path is
 | --- | --- | --- |
 | 🪟 Windows | [tiaotiaohou-Setup.exe](https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou-Setup.exe) | Double-click to install |
 | 🍎 macOS | [tiaotiaohou-macos.zip](https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou-macos.zip) | Unzip and open. If blocked, allow it in System Settings → Privacy & Security |
+| 🐧 Linux | [tiaotiaohou-linux-amd64.deb](https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou-linux-amd64.deb) · [tiaotiaohou-linux-x64.tar.gz](https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou-linux-x64.tar.gz) | 64-bit. Install the deb, or unzip and run `tiaotiaohou`. The browser follows. If it does not, reopen it. Games use `127.0.0.1:1080` |
 | 🤖 Android | [tiaotiaohou.apk](https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou.apk) | After install, set apps to `127.0.0.1:1080`. Allow notifications and background running |
 
 🛠️ After install:

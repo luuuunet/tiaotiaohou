@@ -126,7 +126,7 @@ Future<SpeedSample> measurePing(String host) async {
     return const SpeedSample(ok: false, label: '失败');
   }
   final text = '${r.stdout}\n${r.stderr}';
-  final rtt = RegExp(r'round-trip min/avg/max(?:/[a-z]+)? = [\d.]+/([\d.]+)').firstMatch(text);
+  final rtt = RegExp(r'(?:round-trip|rtt) min/avg/max(?:/[a-z]+)? = [\d.]+/([\d.]+)').firstMatch(text);
   if (rtt != null) return SpeedSample(ok: true, label: '${_ms(rtt.group(1)!)}ms');
   final avg = RegExp(r'(?:Average|平均)\s*=\s*(\d+)').firstMatch(text);
   if (avg != null) return SpeedSample(ok: true, label: '${avg.group(1)}ms');

@@ -3,16 +3,18 @@ import 'dart:io';
 
 import 'package:ffi/ffi.dart';
 
-/// 开机自启。Windows 写当前用户 Run 项，macOS 写当前用户的登录项。
+/// 开机自启。Windows 写当前用户 Run 项，macOS 写登录项，Linux 写 XDG autostart。
 class Autostart {
   static const _valueName = 'TiaoTiaoHou';
   static const _subKey = r'Software\Microsoft\Windows\CurrentVersion\Run';
   static const _macLabel = 'dev.rsq.tiaotiaohou';
+  static const _linuxName = 'dev.rsq.rsq.desktop';
 
-  static bool get supported => Platform.isWindows || Platform.isMacOS;
+  static bool get supported => Platform.isWindows || Platform.isMacOS || Platform.isLinux;
 
   static Future<bool> isEnabled() async {
     if (Platform.isMacOS) return _macEnabled();
+    if (Platform.isLinux) return _linuxEnabled();
     if (!supported) return false;
     final current = _read();
     if (current == null || current.isEmpty) return false;
@@ -26,6 +28,7 @@ class Autostart {
 
   static Future<String?> setEnabled(bool enabled) async {
     if (Platform.isMacOS) return _macSet(enabled);
+    if (Platform.isLinux) return _linuxSet(enabled);
     if (!supported) return '这个系统暂不支持开机自启';
     if (enabled) {
       final path = Platform.resolvedExecutable.replaceAll('/', '\\');
@@ -37,6 +40,57 @@ class Autostart {
     // 2 = ERROR_FILE_NOT_FOUND，本来就没有也算成功
     if (deleted != 0 && deleted != 2) return '关掉开机自启失败';
     return null;
+  }
+
+  /// Desktop Entry 的 Exec 转义。空格写成反斜杠空格。
+  static String desktopExec(String exe) {
+    return exe.replaceAll('\\', '\\\\').replaceAll('"', r'\"').replaceAll(' ', r'\ ').replaceAll('`', r'\`').replaceAll(r'$', r'\$');
+  }
+
+  static String linuxAutostartEntry(String exe) {
+    return '''
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=跳跳猴
+Comment=一只会跳跳的猴子
+Exec=${desktopExec(exe)} --quiet
+Terminal=false
+X-GNOME-Autostart-enabled=true
+''';
+  }
+
+  static File? _linuxAutostartFile() {
+    final xdg = Platform.environment['XDG_CONFIG_HOME'] ?? '';
+    final home = Platform.environment['HOME'] ?? '';
+    final root = xdg.isNotEmpty ? xdg : (home.isEmpty ? '' : '$home/.config');
+    if (root.isEmpty) return null;
+    return File('$root/autostart/$_linuxName');
+  }
+
+  static bool _linuxEnabled() {
+    final file = _linuxAutostartFile();
+    if (file == null || !file.existsSync()) return false;
+    final text = file.readAsStringSync();
+    if (text.contains('X-GNOME-Autostart-enabled=false')) return false;
+    if (RegExp(r'^Hidden=true', multiLine: true).hasMatch(text)) return false;
+    return text.contains(desktopExec(Platform.resolvedExecutable)) && text.contains('--quiet');
+  }
+
+  static Future<String?> _linuxSet(bool enabled) async {
+    final file = _linuxAutostartFile();
+    if (file == null) return '开机自启没有写进去';
+    try {
+      if (!enabled) {
+        if (file.existsSync()) file.deleteSync();
+        return null;
+      }
+      file.parent.createSync(recursive: true);
+      file.writeAsStringSync(linuxAutostartEntry(Platform.resolvedExecutable));
+      return null;
+    } catch (_) {
+      return '开机自启没有写进去';
+    }
   }
 
   static File get _macPlist {

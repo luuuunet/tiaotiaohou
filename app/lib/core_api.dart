@@ -88,6 +88,8 @@ String? _find(String name) {
     for (var i = 0; i < 8; i++) {
       final beside = File('${dir.path}${Platform.pathSeparator}$name');
       if (beside.existsSync()) return beside.path;
+      final inLib = File('${dir.path}${Platform.pathSeparator}lib${Platform.pathSeparator}$name');
+      if (inLib.existsSync()) return inLib.path;
       for (final profile in const ['release', 'debug']) {
         final nested = File(
           '${dir.path}${Platform.pathSeparator}core${Platform.pathSeparator}target${Platform.pathSeparator}$profile${Platform.pathSeparator}$name',
