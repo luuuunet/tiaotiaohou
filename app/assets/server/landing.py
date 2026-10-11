@@ -465,7 +465,7 @@ async def main() -> None:
         print(f"tiaotiaohou landing udp 0.0.0.0:{UDP_PORT}", flush=True)
     except OSError as err:
         print(f"tiaotiaohou landing udp failed: {err}", flush=True)
-    if raw is None and origin is None:
+    if raw is None and origin is None and tls is None:
         raise SystemExit("没有监听成功")
     try:
         await asyncio.Future()

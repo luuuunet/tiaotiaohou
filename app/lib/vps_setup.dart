@@ -340,11 +340,27 @@ if [ "$mode" = "acme-http" ]; then
     echo "acme needs domain" >&2
     exit 1
   fi
-  resolved="$(python3 -c 'import os,socket; print(socket.gethostbyname(os.environ["TTM_DOMAIN"]))' 2>/dev/null || true)"
-  if [ -z "$resolved" ] || [ "$resolved" != "$expect_ip" ]; then
-    echo "域名 $domain 还没指向 $expect_ip" >&2
-    exit 1
-  fi
+  resolved="$(python3 - <<'PY'
+import json, os, urllib.request
+domain = os.environ["TTM_DOMAIN"]
+req = urllib.request.Request(
+    "https://1.1.1.1/dns-query?name=" + domain + "&type=A",
+    headers={"accept": "application/dns-json"},
+)
+try:
+    data = json.load(urllib.request.urlopen(req, timeout=8))
+    print(" ".join(item.get("data", "") for item in data.get("Answer", []) if item.get("type") == 1))
+except Exception:
+    print("")
+PY
+)"
+  case " $resolved " in
+    *" $expect_ip "*) ;;
+    *)
+      echo "域名 $domain 还没指向 $expect_ip" >&2
+      exit 1
+      ;;
+  esac
   echo "正在安装 ACME 工具"
   if ! command -v certbot >/dev/null 2>&1; then
     if command -v apt-get >/dev/null 2>&1; then
@@ -361,6 +377,13 @@ if [ "$mode" = "acme-http" ]; then
   fi
   if command -v ufw >/dev/null 2>&1; then
     ufw allow 80/tcp || true
+  fi
+  if command -v firewall-cmd >/dev/null 2>&1; then
+    firewall-cmd --permanent --add-port=80/tcp || true
+    firewall-cmd --reload || true
+  fi
+  if command -v iptables >/dev/null 2>&1; then
+    iptables -C INPUT -p tcp --dport 80 -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport 80 -j ACCEPT || true
   fi
   echo "正在为 $domain 申请证书"
   certbot certonly --standalone \
