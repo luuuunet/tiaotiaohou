@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>跳跳猴</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <main>
+    <p class="badge">YOU</p>
+    <h1>跳跳猴</h1>
+    <p class="tag">一只会跳跳的猴子</p>
+    <p id="status" class="status">未连接</p>
+    <p id="detail" class="detail"></p>
+    <label>
+      本机 HTTP 端口
+      <input id="port" type="number" min="1" max="65535" value="8080" />
+    </label>
+    <button id="toggle" type="button">开始连接</button>
+  </main>
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

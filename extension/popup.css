@@ -1,0 +1,94 @@
+:root {
+  color: #111111;
+  background: #f7f6f1;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+body {
+  margin: 0;
+  width: 320px;
+}
+
+main {
+  margin: 12px;
+  padding: 18px 16px 16px;
+  background: #ffffff;
+  border: 1.4px solid #111111;
+  border-radius: 22px;
+}
+
+.badge {
+  display: inline-block;
+  margin: 0;
+  padding: 3px 7px;
+  background: #111111;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+}
+
+h1 {
+  margin: 10px 0 0;
+  font-size: 32px;
+  line-height: 1.05;
+  letter-spacing: -1px;
+}
+
+.tag {
+  margin: 6px 0 0;
+  color: #6b6b6b;
+  font-size: 13px;
+}
+
+.status {
+  margin: 16px 0 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.detail {
+  min-height: 40px;
+  margin: 6px 0 0;
+  color: #6b6b6b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+label {
+  display: block;
+  margin-top: 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+input {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1.4px solid #111111;
+  border-radius: 10px;
+  font-size: 16px;
+}
+
+button {
+  width: 100%;
+  margin-top: 14px;
+  padding: 12px 10px;
+  border: 1.4px solid #111111;
+  border-radius: 14px;
+  background: #f4c63a;
+  color: #111111;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+button.busy {
+  opacity: 0.6;
+}
+
+button.on {
+  background: #b7f27a;
+}

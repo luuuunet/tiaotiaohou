@@ -111,7 +111,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release view windows --repo ${{ github.repository }} || gh release create windows --repo ${{ github.repository }} --title "跳跳猴" --notes "Windows 双击 tiaotiaohou-Setup.exe。macOS 解压 tiaotiaohou-macos.zip。Linux 安装 tiaotiaohou-linux-amd64.deb，或解压 tiaotiaohou-linux-x64.tar.gz。Android 安装 tiaotiaohou.apk。"
+          gh release view windows --repo ${{ github.repository }} || gh release create windows --repo ${{ github.repository }} --title "跳跳猴" --notes "Windows 双击 tiaotiaohou-Setup.exe。macOS 解压 tiaotiaohou-macos.zip。Linux 安装 tiaotiaohou-linux-amd64.deb，或解压 tiaotiaohou-linux-x64.tar.gz。Android 安装 tiaotiaohou.apk，在应用里填 127.0.0.1:1080。浏览器解压 tiaotiaohou-browser.zip，用 Chrome 或 Edge 加载。先打开跳跳猴并开始连接。"
           gh release upload windows dist/tiaotiaohou-macos.zip --repo ${{ github.repository }} --clobber
 
   linux:
@@ -148,8 +148,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release view windows --repo ${{ github.repository }} || gh release create windows --repo ${{ github.repository }} --title "跳跳猴" --notes "Windows 双击 tiaotiaohou-Setup.exe。macOS 解压 tiaotiaohou-macos.zip。Linux 安装 tiaotiaohou-linux-amd64.deb，或解压 tiaotiaohou-linux-x64.tar.gz。Android 安装 tiaotiaohou.apk。"
-          gh release edit windows --repo ${{ github.repository }} --notes "Windows 双击 tiaotiaohou-Setup.exe。macOS 解压 tiaotiaohou-macos.zip。Linux 安装 tiaotiaohou-linux-amd64.deb，或解压 tiaotiaohou-linux-x64.tar.gz。Android 安装 tiaotiaohou.apk，在应用里填 127.0.0.1:1080。"
+          gh release view windows --repo ${{ github.repository }} || gh release create windows --repo ${{ github.repository }} --title "跳跳猴" --notes "Windows 双击 tiaotiaohou-Setup.exe。macOS 解压 tiaotiaohou-macos.zip。Linux 安装 tiaotiaohou-linux-amd64.deb，或解压 tiaotiaohou-linux-x64.tar.gz。Android 安装 tiaotiaohou.apk，在应用里填 127.0.0.1:1080。浏览器解压 tiaotiaohou-browser.zip，用 Chrome 或 Edge 加载。先打开跳跳猴并开始连接。"
+          gh release edit windows --repo ${{ github.repository }} --notes "Windows 双击 tiaotiaohou-Setup.exe。macOS 解压 tiaotiaohou-macos.zip。Linux 安装 tiaotiaohou-linux-amd64.deb，或解压 tiaotiaohou-linux-x64.tar.gz。Android 安装 tiaotiaohou.apk，在应用里填 127.0.0.1:1080。浏览器解压 tiaotiaohou-browser.zip，用 Chrome 或 Edge 加载。先打开跳跳猴并开始连接。"
           gh release upload windows dist/tiaotiaohou-linux-amd64.deb dist/tiaotiaohou-linux-x64.tar.gz --repo ${{ github.repository }} --clobber
 
   android:
@@ -214,5 +214,35 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release view windows --repo ${{ github.repository }} || gh release create windows --repo ${{ github.repository }} --title "跳跳猴" --notes "Windows 双击 tiaotiaohou-Setup.exe。macOS 解压 tiaotiaohou-macos.zip。Android 安装 tiaotiaohou.apk，在应用里填 127.0.0.1:1080。"
+          gh release view windows --repo ${{ github.repository }} || gh release create windows --repo ${{ github.repository }} --title "跳跳猴" --notes "Windows 双击 tiaotiaohou-Setup.exe。macOS 解压 tiaotiaohou-macos.zip。Linux 安装 tiaotiaohou-linux-amd64.deb，或解压 tiaotiaohou-linux-x64.tar.gz。Android 安装 tiaotiaohou.apk，在应用里填 127.0.0.1:1080。浏览器解压 tiaotiaohou-browser.zip，用 Chrome 或 Edge 加载。先打开跳跳猴并开始连接。"
+          gh release edit windows --repo ${{ github.repository }} --notes "Windows 双击 tiaotiaohou-Setup.exe。macOS 解压 tiaotiaohou-macos.zip。Linux 安装 tiaotiaohou-linux-amd64.deb，或解压 tiaotiaohou-linux-x64.tar.gz。Android 安装 tiaotiaohou.apk，在应用里填 127.0.0.1:1080。浏览器解压 tiaotiaohou-browser.zip，用 Chrome 或 Edge 加载。先打开跳跳猴并开始连接。"
           gh release upload windows dist/tiaotiaohou.apk --repo ${{ github.repository }} --clobber
+
+  browser:
+    name: 浏览器扩展
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test proxy rules
+        run: node --test extension/proxy_rules.test.js
+      - name: Pack extension
+        run: |
+          mkdir -p dist
+          cd extension
+          zip -r "$GITHUB_WORKSPACE/dist/tiaotiaohou-browser.zip" . -x 'proxy_rules.test.js' -x 'package.json'
+          unzip -l "$GITHUB_WORKSPACE/dist/tiaotiaohou-browser.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tiaotiaohou-browser
+          path: dist/tiaotiaohou-browser.zip
+          if-no-files-found: error
+      - name: Publish extension
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view windows --repo ${{ github.repository }} || gh release create windows --repo ${{ github.repository }} --title "跳跳猴" --notes "Windows 双击 tiaotiaohou-Setup.exe。macOS 解压 tiaotiaohou-macos.zip。Linux 安装 tiaotiaohou-linux-amd64.deb，或解压 tiaotiaohou-linux-x64.tar.gz。Android 安装 tiaotiaohou.apk，在应用里填 127.0.0.1:1080。浏览器解压 tiaotiaohou-browser.zip，用 Chrome 或 Edge 加载。先打开跳跳猴并开始连接。"
+          gh release edit windows --repo ${{ github.repository }} --notes "Windows 双击 tiaotiaohou-Setup.exe。macOS 解压 tiaotiaohou-macos.zip。Linux 安装 tiaotiaohou-linux-amd64.deb，或解压 tiaotiaohou-linux-x64.tar.gz。Android 安装 tiaotiaohou.apk，在应用里填 127.0.0.1:1080。浏览器解压 tiaotiaohou-browser.zip，用 Chrome 或 Edge 加载。先打开跳跳猴并开始连接。"
+          gh release upload windows dist/tiaotiaohou-browser.zip --repo ${{ github.repository }} --clobber
