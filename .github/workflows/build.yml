@@ -229,10 +229,11 @@ jobs:
         run: node --test extension/proxy_rules.test.js
       - name: Pack extension
         run: |
-          mkdir -p dist
-          cd extension
-          zip -r "$GITHUB_WORKSPACE/dist/tiaotiaohou-browser.zip" . -x 'proxy_rules.test.js' -x 'package.json'
-          unzip -l "$GITHUB_WORKSPACE/dist/tiaotiaohou-browser.zip"
+          mkdir -p dist/browser
+          cp extension/manifest.json extension/background.js extension/popup.html extension/popup.css extension/popup.js extension/proxy_rules.js extension/icon16.png extension/icon48.png extension/icon128.png dist/browser/
+          node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('dist/browser/manifest.json','utf8')); if(!(m.host_permissions||[]).includes('http://127.0.0.1:*/*')) process.exit(1)"
+          (cd dist/browser && zip -r "$GITHUB_WORKSPACE/dist/tiaotiaohou-browser.zip" .)
+          unzip -l dist/tiaotiaohou-browser.zip
       - uses: actions/upload-artifact@v4
         with:
           name: tiaotiaohou-browser

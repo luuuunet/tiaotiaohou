@@ -10,7 +10,7 @@ export function bypassList() {
   return [
     'localhost',
     '127.0.0.1',
-    '::1',
+    '[::1]',
     '<local>',
     '10.0.0.0/8',
     '172.16.0.0/12',
@@ -34,6 +34,14 @@ export function proxyConfig(port) {
   };
 }
 
-export function coreIsUp(status) {
-  return Number.isInteger(status) && status >= 100 && status < 600;
+export function coreReply(status, body) {
+  return status === 405 && String(body ?? '').includes('only CONNECT');
+}
+
+export function proxyAlreadyApplied(settings, port) {
+  const proxy = settings?.value?.rules?.singleProxy;
+  return settings?.value?.mode === 'fixed_servers'
+    && proxy?.scheme === 'http'
+    && proxy?.host === '127.0.0.1'
+    && proxy?.port === port;
 }

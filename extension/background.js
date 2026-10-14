@@ -1,4 +1,4 @@
-import { DEFAULT_PORT, coreIsUp, normalizePort, proxyConfig } from './proxy_rules.js';
+import { DEFAULT_PORT, coreReply, normalizePort, proxyAlreadyApplied, proxyConfig } from './proxy_rules.js';
 
 const MISS_LIMIT = 2;
 let misses = 0;
@@ -22,7 +22,8 @@ async function probe(port) {
       cache: 'no-store',
       signal: ctrl.signal,
     });
-    return coreIsUp(res.status);
+    const body = await res.text();
+    return coreReply(res.status, body);
   } catch {
     return false;
   } finally {
@@ -31,10 +32,16 @@ async function probe(port) {
 }
 
 async function applyProxy(port) {
-  await chrome.proxy.settings.set({
-    value: proxyConfig(port),
-    scope: 'regular',
-  });
+  const current = await chrome.proxy.settings.get({});
+  if (current.levelOfControl === 'controlled_by_other_extensions' || current.levelOfControl === 'not_controllable') {
+    throw new Error('浏览器代理被别的扩展或策略占用了');
+  }
+  if (!proxyAlreadyApplied(current, port)) {
+    await chrome.proxy.settings.set({
+      value: proxyConfig(port),
+      scope: 'regular',
+    });
+  }
   try {
     await chrome.privacy.network.webRTCIPHandlingPolicy.set({
       value: 'disable_non_proxied_udp',
@@ -74,7 +81,21 @@ async function connect(port) {
       detail: `127.0.0.1:${safe} 没有在听。请先打开跳跳猴，点开始连接。`,
     });
   }
-  await applyProxy(safe);
+  try {
+    await applyProxy(safe);
+  } catch (err) {
+    try {
+      await clearProxy();
+    } catch {
+      // 清不掉就只把失败告诉用户。
+    }
+    misses = 0;
+    return setState({
+      running: false,
+      port: safe,
+      detail: err instanceof Error ? err.message : '浏览器代理没有设上',
+    });
+  }
   misses = 0;
   return setState({
     running: true,
@@ -102,7 +123,11 @@ async function watch() {
   }
   if (await probe(state.port)) {
     misses = 0;
-    await applyProxy(state.port);
+    try {
+      await applyProxy(state.port);
+    } catch {
+      // 这一轮设不上就等下一次，不要把正在用的浏览器掐掉。
+    }
     return;
   }
   misses += 1;
@@ -136,6 +161,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === 'disconnect') return disconnect();
     return readState();
   };
-  run().then(sendResponse);
+  run().then(sendResponse, (err) => {
+    sendResponse({
+      running: false,
+      port: DEFAULT_PORT,
+      detail: err instanceof Error ? err.message : '扩展内部出错了',
+    });
+  });
   return true;
 });

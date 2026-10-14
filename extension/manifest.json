@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "跳跳猴",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "让当前浏览器走本机跳跳猴。只使用 127.0.0.1。",
   "action": {
     "default_popup": "popup.html",
@@ -17,7 +17,7 @@
     "type": "module"
   },
   "permissions": ["proxy", "storage", "privacy", "alarms"],
-  "host_permissions": ["http://127.0.0.1/*"],
+  "host_permissions": ["http://127.0.0.1:*/*"],
   "incognito": "spanning",
   "icons": {
     "16": "icon16.png",
