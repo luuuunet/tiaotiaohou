@@ -1,4 +1,4 @@
-import { DEFAULT_PORT, coreReply, normalizePort, proxyAlreadyApplied, proxyConfig } from './proxy_rules.js';
+import { DEFAULT_PORT, NATIVE_HOST, browserConfig, coreReply, normalizePort, proxyAlreadyApplied, proxyConfig } from './proxy_rules.js';
 
 const MISS_LIMIT = 2;
 let misses = 0;
@@ -7,10 +7,33 @@ async function readState() {
   const saved = await chrome.storage.local.get({
     running: false,
     port: DEFAULT_PORT,
-    detail: '还没有让浏览器走跳跳猴',
+    endpoint: '',
+    token: '',
+    secret: '',
+    detail: '先双击启动.bat，再填节点地址和令牌',
   });
+  let secret = String(saved.secret || '');
+  if (!/^[0-9a-f]{32,128}$/i.test(secret)) {
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    secret = [...bytes].map((item) => item.toString(16).padStart(2, '0')).join('');
+    await chrome.storage.local.set({ secret });
+  }
   const port = normalizePort(saved.port) ?? DEFAULT_PORT;
-  return { running: Boolean(saved.running), port, detail: String(saved.detail || '') };
+  return {
+    running: Boolean(saved.running),
+    port,
+    endpoint: String(saved.endpoint || ''),
+    token: String(saved.token || ''),
+    secret,
+    detail: String(saved.detail || ''),
+  };
+}
+
+function publicState(state) {
+  const copy = { ...state };
+  delete copy.secret;
+  return copy;
 }
 
 async function probe(port) {
@@ -66,52 +89,123 @@ async function setState(patch) {
   return readState();
 }
 
-async function connect(port) {
-  const safe = normalizePort(port);
-  if (safe == null) {
-    return setState({ running: false, detail: '端口不对，请填 1 到 65535' });
+function explainNative(text) {
+  const raw = String(text || '');
+  if (/not found/i.test(raw) || raw === '') return '还没登记核心。请先双击压缩包里的启动.bat';
+  if (/forbidden|access/i.test(raw)) return '浏览器不让这个扩展启动核心。请重新双击启动.bat，并加载 extension 文件夹';
+  return raw;
+}
+
+function talkNative(message) {
+  return new Promise((resolve, reject) => {
+    let port;
+    try {
+      port = chrome.runtime.connectNative(NATIVE_HOST);
+    } catch (err) {
+      reject(new Error(explainNative(err instanceof Error ? err.message : '')));
+      return;
+    }
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { port.disconnect(); } catch { /* 主机可能已经退出 */ }
+      fn(value);
+    };
+    const timer = setTimeout(() => finish(reject, new Error('核心没有回应')), 20000);
+    port.onMessage.addListener((msg) => {
+      if (msg && msg.ok) finish(resolve, msg);
+      else finish(reject, new Error((msg && msg.error) || '核心启动失败'));
+    });
+    port.onDisconnect.addListener(() => {
+      const last = chrome.runtime.lastError && chrome.runtime.lastError.message;
+      finish(reject, new Error(explainNative(last)));
+    });
+    try {
+      port.postMessage(message);
+    } catch (err) {
+      finish(reject, new Error(explainNative(err instanceof Error ? err.message : '')));
+    }
+  });
+}
+
+async function connect(fields) {
+  const built = browserConfig(fields);
+  const keep = {
+    endpoint: String(fields?.endpoint || '').trim(),
+    token: String(fields?.token || ''),
+    port: normalizePort(fields?.port) ?? DEFAULT_PORT,
+  };
+  if (built.error) {
+    await clearProxy();
+    misses = 0;
+    return setState({ running: false, ...keep, detail: built.error });
   }
-  const up = await probe(safe);
+  const state = await readState();
+  try {
+    await talkNative({ type: 'start', secret: state.secret, config: built.config });
+  } catch (err) {
+    await clearProxy();
+    misses = 0;
+    return setState({
+      running: false,
+      endpoint: built.endpoint,
+      token: built.token,
+      port: built.port,
+      detail: err instanceof Error ? err.message : '核心启动失败',
+    });
+  }
+  const up = await probe(built.port);
   if (!up) {
     await clearProxy();
     misses = 0;
     return setState({
       running: false,
-      port: safe,
-      detail: `127.0.0.1:${safe} 没有在听。请先打开跳跳猴，点开始连接。`,
+      endpoint: built.endpoint,
+      token: built.token,
+      port: built.port,
+      detail: '核心没有按预期在本机听。请再点一次开始连接。',
     });
   }
   try {
-    await applyProxy(safe);
+    await applyProxy(built.port);
   } catch (err) {
-    try {
-      await clearProxy();
-    } catch {
-      // 清不掉就只把失败告诉用户。
-    }
+    try { await clearProxy(); } catch { /* 清不掉就只把失败告诉用户 */ }
     misses = 0;
     return setState({
       running: false,
-      port: safe,
+      endpoint: built.endpoint,
+      token: built.token,
+      port: built.port,
       detail: err instanceof Error ? err.message : '浏览器代理没有设上',
     });
   }
   misses = 0;
   return setState({
     running: true,
-    port: safe,
-    detail: `浏览器正在走 127.0.0.1:${safe}。关掉跳跳猴后，这里会自动放开。`,
+    endpoint: built.endpoint,
+    token: built.token,
+    port: built.port,
+    detail: `浏览器正在走 127.0.0.1:${built.port}`,
   });
 }
 
 async function disconnect() {
+  const state = await readState();
+  try {
+    await talkNative({ type: 'stop', secret: state.secret });
+  } catch {
+    // 核心已经不在时，浏览器仍然要放开。
+  }
   await clearProxy();
   misses = 0;
-  const state = await readState();
   return setState({
     running: false,
     port: state.port,
-    detail: '浏览器已断开。跳跳猴如果还开着，其它软件仍可能在走。',
+    endpoint: state.endpoint,
+    token: state.token,
+    detail: '浏览器已断开，核心也停了。',
   });
 }
 
@@ -156,10 +250,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const run = async () => {
-    if (message?.type === 'state') return readState();
-    if (message?.type === 'connect') return connect(message.port);
-    if (message?.type === 'disconnect') return disconnect();
-    return readState();
+    if (message?.type === 'state') return publicState(await readState());
+    if (message?.type === 'connect') return publicState(await connect(message));
+    if (message?.type === 'disconnect') return publicState(await disconnect());
+    return publicState(await readState());
   };
   run().then(sendResponse, (err) => {
     sendResponse({

@@ -125,6 +125,22 @@ fn start_inner(json: &str) -> i32 {
     0
 }
 
+pub fn start_json(json: &str) -> Result<(), String> {
+    if start_inner(json) == 0 {
+        Ok(())
+    } else {
+        Err(LAST.lock().unwrap_or_else(|err| err.into_inner()).clone())
+    }
+}
+
+pub fn stop_core() {
+    unsafe { rsq_stop() };
+}
+
+pub fn stats_json() -> String {
+    stats_handle().snapshot()
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn rsq_set_fetch(enabled: i32) -> i32 {
     let result = catch_unwind(AssertUnwindSafe(|| {
@@ -181,4 +197,13 @@ pub unsafe extern "C" fn rsq_last_error() -> *const c_char {
     let ptr = c.as_ptr();
     *LAST_C.lock().unwrap_or_else(|err| err.into_inner()) = Some(c);
     ptr
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn empty_config_is_rejected() {
+        let err = crate::start_json("").unwrap_err();
+        assert!(err.contains("配置") || err.contains("JSON"), "{err}");
+    }
 }

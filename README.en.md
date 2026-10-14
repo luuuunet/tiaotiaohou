@@ -13,7 +13,7 @@ Cloudflare gives each user a free quota you can use directly. The Worker path is
 | 🍎 macOS | [tiaotiaohou-macos.zip](https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou-macos.zip) | Unzip and open. If blocked, allow it in System Settings → Privacy & Security |
 | 🐧 Linux | [tiaotiaohou-linux-amd64.deb](https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou-linux-amd64.deb) · [tiaotiaohou-linux-x64.tar.gz](https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou-linux-x64.tar.gz) | 64-bit. Install the deb, or unzip and run `tiaotiaohou`. The browser follows. If it does not, reopen it. Games use `127.0.0.1:1080` |
 | 🤖 Android | [tiaotiaohou.apk](https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou.apk) | After install, set apps to `127.0.0.1:1080`. Allow notifications and background running |
-| 🌐 Browser | [tiaotiaohou-browser.zip](https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou-browser.zip) | Chrome or Edge. Unzip, then load the folder as an unpacked extension. Open TiaoTiaoHou and connect first, then connect in the extension |
+| 🌐 Browser | [tiaotiaohou-browser.zip](https://github.com/luuuunet/tiaotiaohou/releases/download/windows/tiaotiaohou-browser.zip) | Windows. Unzip, double-click `启动.bat`, then load the `extension` folder in Chrome or Edge with Developer mode. Enter the node address and token, then connect. Only this browser is proxied |
 
 🛠️ After install:
 

@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
   "name": "跳跳猴",
-  "version": "1.0.1",
-  "description": "让当前浏览器走本机跳跳猴。只使用 127.0.0.1。",
+  "version": "1.1.0",
+  "description": "在浏览器里直接连接跳跳猴。只使用 127.0.0.1。",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAk/18TX1ZBLZomX8c1BJlzKGAHHJQ9nYsjawaKGmAsnTPJHHhEZC6C8CF1PuNAhDZLlax7pXq1fRbTWv75sS7tgzuO1az8bejZ+4WQbeqAYdnBDXRVNaeqeDPEtZ5ZX2j8RvXfKkapH1tn2D5n767gNlcmnl+F0cqhCZDBzauF16u0d4nV6dUDNS3U7JCi4le81wr0/dyTBQr8j0uqh8TYtt2UNCk2tQLYJ7s/Aj24wNaqk4inX7XK0f7JEiRKIB0PVFhJIllIe8n0X+j86dQY09PBBNvWi8/NgDQroT2omlgJ0lj3oQX/qYzPCPUsdFoSFYTjC6TlvbabKLKbULBZQIDAQAB",
   "action": {
     "default_popup": "popup.html",
     "default_title": "跳跳猴",
@@ -16,7 +17,7 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["proxy", "storage", "privacy", "alarms"],
+  "permissions": ["proxy", "storage", "privacy", "alarms", "nativeMessaging"],
   "host_permissions": ["http://127.0.0.1:*/*"],
   "incognito": "spanning",
   "icons": {

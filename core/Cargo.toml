@@ -9,6 +9,10 @@ license = "MIT"
 name = "rsq_core"
 crate-type = ["cdylib", "rlib"]
 
+[[bin]]
+name = "tiaotiaohou-browser"
+path = "src/bin/tiaotiaohou_browser.rs"
+
 [profile.dev]
 debug = "line-tables-only"
 

@@ -1,4 +1,5 @@
 export const DEFAULT_PORT = 8080;
+export const NATIVE_HOST = 'dev.rsq.tiaotiaohou';
 
 export function normalizePort(value) {
   const port = Number.parseInt(String(value ?? ''), 10);
@@ -44,4 +45,37 @@ export function proxyAlreadyApplied(settings, port) {
     && proxy?.scheme === 'http'
     && proxy?.host === '127.0.0.1'
     && proxy?.port === port;
+}
+
+export function browserConfig(input) {
+  const port = normalizePort(input?.port);
+  if (port == null) return { error: '端口不对，请填 1 到 65535' };
+  const endpoint = String(input?.endpoint || '').trim();
+  let url;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return { error: '节点地址不合法' };
+  }
+  if (url.protocol !== 'https:') return { error: '节点必须是 https:// 开头' };
+  if (url.username || url.password) return { error: '节点地址不能带用户名' };
+  if (url.pathname !== '/' && url.pathname !== '') return { error: '节点地址不要带路径' };
+  const token = String(input?.token || '').trim();
+  if (!token || token.length > 512 || /[\u0000-\u001f]/.test(token)) return { error: '请填写节点令牌' };
+  return {
+    endpoint,
+    token,
+    port,
+    config: {
+      endpoint,
+      token,
+      socks_port: port === 1080 ? 1081 : 1080,
+      http_port: port,
+      prefer_h3: true,
+      fetch_enabled: false,
+      exit_via: 'landing',
+      bypass: [],
+      rule_mode: true,
+    },
+  };
 }
