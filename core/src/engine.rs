@@ -7,7 +7,7 @@ const HEARTBEAT_EVERY: Duration = Duration::from_secs(15);
 const OP_TIMEOUT: Duration = Duration::from_secs(12);
 const PING_WAIT: Duration = Duration::from_secs(4);
 const QUIC_HEAD: Duration = Duration::from_secs(4);
-const TUNNEL_IDLE: Duration = Duration::from_secs(90);
+const TUNNEL_IDLE: Duration = Duration::from_secs(600);
 
 use bytes::{Buf, Bytes};
 use http::StatusCode;

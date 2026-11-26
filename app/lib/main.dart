@@ -106,6 +106,7 @@ class _HomePageState extends State<HomePage> {
   Timer? _netTimer;
   Timer? _ifaceTimer;
   var _netSig = '';
+  var _lastNetReapply = DateTime.fromMillisecondsSinceEpoch(0);
   var _quotaLine = '';
   var _quotaWarn = false;
   var _speedBusy = false;
@@ -731,11 +732,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _onNetworkChanged() async {
-    if (DateTime.now().difference(_startedAt) < const Duration(seconds: 5)) return;
+    if (DateTime.now().difference(_startedAt) < const Duration(seconds: 8)) return;
     _netTimer?.cancel();
-    _netTimer = Timer(const Duration(seconds: 2), () async {
+    _netTimer = Timer(const Duration(seconds: 3), () async {
       if (!mounted || _closing || _userStop) return;
+      if (DateTime.now().difference(_lastNetReapply) < const Duration(seconds: 45)) return;
       if (_running || _status == '正在重连') {
+        _lastNetReapply = DateTime.now();
         _note('网络已切换，正在恢复');
         await _reapplyRuntime();
         return;

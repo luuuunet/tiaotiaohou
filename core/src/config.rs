@@ -261,6 +261,13 @@ fn is_mainland(host: &str) -> bool {
     ROOTS.iter().any(|root| host_matches(host, root))
 }
 
+/// Cursor 这类双向长连接。走 HTTP/3 时 Cloudflare 会中途重置，客户端就一直 Reconnect。
+pub fn is_interactive_host(host: &str) -> bool {
+    let host = host.trim_matches(|c| c == '[' || c == ']').to_ascii_lowercase();
+    const MARKS: &[&str] = &["cursor.sh", "cursor.com", "cursorapi.com", "cursor-cdn.com"];
+    MARKS.iter().any(|mark| host == *mark || host.strip_suffix(mark).is_some_and(|rest| rest.ends_with('.')))
+}
+
 pub fn is_stream_host(host: &str) -> bool {
     let host = host.trim_matches(|c| c == '[' || c == ']').to_ascii_lowercase();
     const MARKS: &[&str] = &[
@@ -292,6 +299,10 @@ pub fn is_stream_host(host: &str) -> bool {
         "huya.com",
         "douyucdn.cn",
         "douyu.com",
+        "cursor.sh",
+        "cursor.com",
+        "cursorapi.com",
+        "cursor-cdn.com",
     ];
     MARKS.iter().any(|mark| host == *mark || host.strip_suffix(mark).is_some_and(|rest| rest.ends_with('.')))
 }
@@ -350,6 +361,15 @@ mod tests {
         .unwrap();
         assert_eq!(cfg.exit_via, "cdn");
         assert!(cfg.has_udp());
+    }
+
+    #[test]
+    fn cursor_uses_the_stable_lane() {
+        assert!(super::is_interactive_host("api2.cursor.sh"));
+        assert!(super::is_interactive_host("api2.cursor.com"));
+        assert!(super::is_stream_host("repo42.cursor.sh"));
+        assert!(!super::is_interactive_host("example.com"));
+        assert!(!super::is_interactive_host("notcursor.sh"));
     }
 
     #[test]

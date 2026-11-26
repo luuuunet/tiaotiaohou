@@ -20,22 +20,31 @@ use crate::relay::Tunnel;
 const PING_EVERY: Duration = Duration::from_secs(15);
 
 pub async fn open(cfg: Config, host: String, port: u16, reply: oneshot::Sender<Result<Tunnel, String>>) {
+    if let Some((reply, err)) = open_or_return(cfg, host, port, reply).await {
+        let _ = reply.send(Err(err));
+    }
+}
+
+/// 握手失败时把 reply 还回来，方便改走别的线路。成功则自己接管到连接结束。
+pub async fn open_or_return(
+    cfg: Config,
+    host: String,
+    port: u16,
+    reply: oneshot::Sender<Result<Tunnel, String>>,
+) -> Option<(oneshot::Sender<Result<Tunnel, String>>, String)> {
     if let Err(err) = check_target(&host, port) {
         let _ = reply.send(Err(err));
-        return;
+        return None;
     }
     let socket = match connect(&cfg, &host, port).await {
         Ok(socket) => socket,
-        Err(err) => {
-            let _ = reply.send(Err(err));
-            return;
-        }
+        Err(err) => return Some((reply, err)),
     };
     let (mut write, mut read) = socket.split();
     let (up_tx, mut up_rx) = mpsc::channel::<Bytes>(crate::relay::PIPE_QUEUE);
     let (down_tx, down_rx) = mpsc::channel::<Bytes>(crate::relay::PIPE_QUEUE);
     if reply.send(Ok(Tunnel { tx: up_tx, rx: down_rx })).is_err() {
-        return;
+        return None;
     }
     let mut ping = tokio::time::interval(PING_EVERY);
     ping.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -79,6 +88,7 @@ pub async fn open(cfg: Config, host: String, port: u16, reply: oneshot::Sender<R
             }
         }
     }
+    None
 }
 
 async fn connect(

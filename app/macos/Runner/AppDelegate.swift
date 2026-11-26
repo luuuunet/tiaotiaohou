@@ -8,6 +8,8 @@ enum HostBridge {
   static var statusItem: NSStatusItem?
   static var quitting = false
   static var pathMonitor: NWPathMonitor?
+  static var pathSig = ""
+  static var pathReady = false
 }
 
 @main
@@ -134,8 +136,21 @@ extension HostBridge {
   static func installPathMonitor() {
     if pathMonitor != nil { return }
     let monitor = NWPathMonitor()
-    monitor.pathUpdateHandler = { _ in
+    monitor.pathUpdateHandler = { path in
+      let names = path.availableInterfaces
+        .filter { $0.type == .wifi || $0.type == .wiredEthernet || $0.type == .cellular }
+        .map(\.name)
+        .sorted()
+        .joined(separator: ",")
+      let sig = "\(path.status == .satisfied ? 1 : 0)|\(names)"
       DispatchQueue.main.async {
+        if !pathReady {
+          pathReady = true
+          pathSig = sig
+          return
+        }
+        if sig == pathSig { return }
+        pathSig = sig
         channel?.invokeMethod("networkChanged", arguments: nil)
       }
     }

@@ -399,6 +399,14 @@ async fn open_spread(cfg: Config, job: Job, lanes: Arc<Lanes>, stats: Arc<Stats>
         crate::vps::open(cfg, host, port, reply).await;
         return;
     }
+    let reply = if crate::config::is_interactive_host(&host) {
+        match crate::ws::open_or_return(cfg.clone(), host.clone(), port, reply).await {
+            None => return,
+            Some((reply, _)) => reply,
+        }
+    } else {
+        reply
+    };
     let stream = is_stream(&host);
     let order = if stream { lanes.order_stream() } else { lanes.order_web() };
     if order.is_empty() {
